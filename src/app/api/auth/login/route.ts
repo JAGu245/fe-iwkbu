@@ -31,7 +31,7 @@ export async function POST(request: Request) {
 
     const serializedCookie = serialize("sessionToken", token, {
       httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
+      secure: false, // Set to false to allow login via IP (HTTP)
       sameSite: "strict",
       maxAge: 60 * 60 * 24, // 1 day
       path: "/",
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
 
     const serializedUserCookie = serialize("userName", user.username, {
       httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
+      secure: false, // Set to false to allow login via IP (HTTP)
       sameSite: "strict",
       maxAge: 60 * 60 * 24, // 1 day
       path: "/",
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
 
     const serializedRoleCookie = serialize("userRole", user.role, {
       httpOnly: false, // Accessible by client-side JS for sidebar logic
-      secure: process.env.NODE_ENV === "production",
+      secure: false, // Set to false to allow login via IP (HTTP)
       sameSite: "strict",
       maxAge: 60 * 60 * 24, // 1 day
       path: "/",
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
 
     const serializedFullNameCookie = serialize("fullName", user.fullname || user.username, {
       httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
+      secure: false, // Set to false to allow login via IP (HTTP)
       sameSite: "strict",
       maxAge: 60 * 60 * 24, // 1 day
       path: "/",
