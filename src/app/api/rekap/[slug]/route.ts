@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { getCachedData, setCachedData } from "@/lib/rekap-cache";
 
 export async function GET(
     request: Request,
@@ -7,6 +8,13 @@ export async function GET(
 ) {
     try {
         const { slug } = await params;
+
+        // Check shared cache
+        const cached = getCachedData(slug);
+        if (cached) {
+            return NextResponse.json(cached);
+        }
+
         const cookieStore = await cookies();
         const token = cookieStore.get("sessionToken")?.value;
 
@@ -14,9 +22,7 @@ export async function GET(
             return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
         }
 
-        // Forward the request to the Go backend on localhost:8080
-        // The frontend server can resolve localhost:8080 even if the user's device cannot.
-        const backendRes = await fetch(`http://localhost:8080/${slug}`, {
+        const backendRes = await fetch(`http://127.0.0.1:8080/${slug}`, {
             method: "GET",
             headers: {
                 "Authorization": `Bearer ${token}`
@@ -32,6 +38,10 @@ export async function GET(
         }
 
         const result = await backendRes.json();
+
+        // Save to cache
+        setCachedData(slug, result);
+
         return NextResponse.json(result);
     } catch (error: any) {
         return NextResponse.json(

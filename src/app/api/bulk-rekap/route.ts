@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-
-// Simple in-memory cache with TTL
-const cache: Record<string, { data: any; timestamp: number }> = {};
-const CACHE_TTL = 1000 * 60 * 5; // 5 minutes
+import { getCachedData, setCachedData } from "@/lib/rekap-cache";
 
 export async function POST(request: Request) {
     try {
@@ -20,18 +17,15 @@ export async function POST(request: Request) {
             return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
         }
 
-        // Check cache first for all endpoints
-        // For simplicity in this iteration, we fetch everything in parallel
-        // and let the Go backend handle individual sheet fetches.
-
         const fetchPromises = endpoints.map(async (endpoint: string) => {
-            // Basic cache check
-            if (cache[endpoint] && (Date.now() - cache[endpoint].timestamp < CACHE_TTL)) {
-                console.log(`[Bulk-Rekap] Cache hit for endpoint: ${endpoint}`);
-                return { endpoint, data: cache[endpoint].data };
+            // Check shared cache
+            const cached = getCachedData(endpoint);
+            if (cached) {
+                console.log(`[Bulk-Rekap] Cache hit: ${endpoint}`);
+                return { endpoint, data: cached };
             }
 
-            console.log(`[Bulk-Rekap] Fetching data for endpoint: ${endpoint}`);
+            console.log(`[Bulk-Rekap] Fetching: ${endpoint}`);
             try {
                 const backendRes = await fetch(`http://127.0.0.1:8080/${endpoint}`, {
                     method: "GET",
@@ -41,16 +35,13 @@ export async function POST(request: Request) {
                 });
 
                 if (!backendRes.ok) {
-                    console.error(`[Bulk-Rekap] Failed to fetch ${endpoint}: ${backendRes.status} ${backendRes.statusText}`);
-                    const errorText = await backendRes.text(); // Get more details from the backend
-                    return { endpoint, error: `Failed to fetch: ${backendRes.statusText} - ${errorText}` };
+                    return { endpoint, error: `Failed: ${backendRes.statusText}` };
                 }
 
                 const result = await backendRes.json();
                 const data = result.data || [];
 
-                // Save to cache
-                cache[endpoint] = { data, timestamp: Date.now() };
+                setCachedData(endpoint, data);
 
                 return { endpoint, data };
             } catch (err: any) {

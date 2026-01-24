@@ -524,13 +524,10 @@ const RekapDashboard = ({
   // const [rekapData, setRekapData] = useState<RekapRow[]>([]); // Replaced by useMemo
   const [month, setMonth] = useState<number>(5);
   // const [loading, setLoading] = useState(true);
-  // const [loading, setLoading] = useState<LoadingState | null>({
-  //   message: "Mempersiapkan data...",
-  //   progress: 0,
-  // });
-  const [loading, setLoading] = useState<string | null>(
-    "Mempersiapkan data..."
-  );
+  const [loading, setLoading] = useState<LoadingState | null>({
+    message: "Mempersiapkan data...",
+    progress: 0,
+  });
   const [error, setError] = useState<string | null>(null);
   const [selectedRow, setSelectedRow] = useState<RekapRow | null>(null);
   const [startDate, setStartDate] = useState<Date | null>(null);
@@ -626,34 +623,47 @@ const RekapDashboard = ({
     saveAs(blob, fileName);
   };
   const fetchData = async () => {
-    setLoading("Mengambil data dari semua loket...");
+    setLoading({ message: "Mengambil data dari semua loket...", progress: 5 });
     setError(null);
     setData([]);
 
     const endpoints = loketMapping.map((item) => item.endpoint.replace(`${BASE_URL}/`, ""));
+    const totalEndpoints = endpoints.length;
+    const batchSize = 5;
+    const accumulatedResults: any[] = [];
 
     try {
-      setLoading("Mengunduh data secara massal...");
+      for (let i = 0; i < totalEndpoints; i += batchSize) {
+        const batch = endpoints.slice(i, i + batchSize);
+        const progress = Math.round(((i) / totalEndpoints) * 100);
 
-      const bulkRes = await fetch("/api/bulk-rekap", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ endpoints }),
-      });
+        setLoading({
+          message: `Mengunduh data massal (${i}/${totalEndpoints})...`,
+          progress
+        });
 
-      if (!bulkRes.ok) {
-        throw new Error("Gagal mengunduh data secara massal");
+        const bulkRes = await fetch("/api/bulk-rekap", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoints: batch }),
+        });
+
+        if (!bulkRes.ok) {
+          throw new Error(`Gagal mengunduh batch ${i / batchSize + 1}`);
+        }
+
+        const batchData = await bulkRes.json();
+        accumulatedResults.push(...batchData.results);
       }
 
-      const bulkData = await bulkRes.json();
-      const responses = bulkData.results.map((res: any) => ({
+      setLoading({ message: "Memproses dan menampilkan data...", progress: 100 });
+
+      const responses = accumulatedResults.map((res: any) => ({
         endpoint: `${BASE_URL}/${res.endpoint}`,
         data: res.data || [],
       }));
 
-      setLoading("Memproses dan menampilkan data...");
       setData(responses);
-
       setTimeout(() => setLoading(null), 500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Terjadi Kesalahan");
@@ -1219,9 +1229,18 @@ const RekapDashboard = ({
   if (loading) {
     return (
       <div className="inset-0 z-50 flex flex-col items-center justify-center min-h-[400px]">
-        <div className="flex items-center gap-3 p-6">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          <p className="text-md text-muted-foreground">{loading}</p>
+        <div className="w-full max-w-md space-y-4 p-6 text-center">
+          <div className="flex items-center justify-center gap-3">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{loading.message}</p>
+          </div>
+          <div className="space-y-2">
+            <Progress value={loading.progress} className="h-2 w-full" />
+            <p className="text-xs text-muted-foreground font-mono">{loading.progress}% Selesai</p>
+          </div>
+          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
+            Sistem sedang sinkronisasi dengan Google Sheets
+          </p>
         </div>
       </div>
     );
