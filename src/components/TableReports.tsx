@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Cookies from "js-cookie";
 import {
   Table,
   TableBody,
@@ -62,6 +63,8 @@ interface ReportData {
   memastikan_nopol: number;
   memastikan_rp: number;
 }
+
+const BASE_URL = process.env.NEXT_PUBLIC_API_BASE;
 
 const TableReport = () => {
   const [data, setData] = useState<ReportData[]>([]);
@@ -152,8 +155,15 @@ const TableReport = () => {
     setLoading(true);
     setError(null);
 
+    const token = Cookies.get("sessionToken");
+    if (!token) return alert("Sesi telah berakhir, silakan login kembali.");
+
     try {
-      const response = await fetch(`http://localhost:8080/${endpoint}`);
+      const response = await fetch(`${BASE_URL}/${endpoint}`, {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
       if (!response.ok) throw new Error("Gagal mengambil data");
 
       const result = await response.json();
@@ -316,9 +326,21 @@ const TableReport = () => {
 
   useEffect(() => {
     const fetchData = async () => {
+      const token = Cookies.get("sessionToken");
+      if (!token) {
+        setError("Sesi telah berakhir, silakan login kembali.");
+        setLoading(false);
+        return;
+      }
+
       try {
         const response = await fetch(
-          "http://localhost:8080/loketcabangjawatengah"
+          `${BASE_URL}/loketcabangjawatengah`,
+          {
+            headers: {
+              "Authorization": `Bearer ${token}`
+            }
+          }
         );
         if (!response.ok) {
           throw new Error("Gagal mengambil data");
@@ -353,9 +375,9 @@ const TableReport = () => {
   return (
     <div className="space-y-4">
       {/* Form */}
-      <div className="flex flex-wrap items-end gap-4 rounded-md border p-4 shadow-sm">
+      <div className="flex flex-wrap items-end gap-4 rounded-md border p-4 shadow-sm bg-white dark:bg-zinc-900">
         <div className="w-64">
-          <Label>Lokasi Cabang</Label>
+          <Label className="dark:text-gray-200">Lokasi Cabang</Label>
           <Select onValueChange={setLoket}>
             <SelectTrigger className="w-[255px]">
               <SelectValue placeholder="Pilih Cabang" />
@@ -450,10 +472,10 @@ const TableReport = () => {
       </div>
 
       {/* Form Filter Tanggal */}
-      <div className="flex flex-wrap items-end gap-4 rounded-md border p-4 shadow-sm">
+      <div className="flex flex-wrap items-end gap-4 rounded-md border p-4 shadow-sm bg-white dark:bg-zinc-900">
         {/* date picker start date */}
         <div className="flex flex-col space-y-1">
-          <Label>Tanggal Mulai</Label>
+          <Label className="dark:text-gray-200">Tanggal Mulai</Label>
           <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -482,7 +504,7 @@ const TableReport = () => {
 
         {/* date picker end date */}
         <div className="flex flex-col space-y-1">
-          <Label>Tanggal Akhir</Label>
+          <Label className="dark:text-gray-200">Tanggal Akhir</Label>
           <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -517,7 +539,7 @@ const TableReport = () => {
       </div>
       {/* Status Loading/Error */}
       {loading && (
-        <div className="p-4 text-center text-sm text-gray-500">
+        <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
           Memuat data...
         </div>
       )}
@@ -528,13 +550,13 @@ const TableReport = () => {
       )}
       {/* Tabel Data */}
       {data.length === 0 && !loading && !error ? (
-        <div className="p-4 text-center text-sm text-gray-500">
+        <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
           Tidak ada data yang ditemukan
         </div>
       ) : (
-        <div className="overflow-auto rounded-lg border shadow-md">
+        <div className="overflow-auto rounded-lg border shadow-md bg-white dark:bg-zinc-900">
           <Table className="min-w-[1200px] text-sm text-center">
-            <TableHeader className="bg-gray-100">
+            <TableHeader className="bg-gray-100 dark:bg-zinc-900">
               <TableRow>
                 {[
                   "No",
@@ -573,7 +595,7 @@ const TableReport = () => {
                 ].map((header, idx) => (
                   <TableHead
                     key={idx}
-                    className="whitespace-nowrap text-xs font-semibold text-gray-700"
+                    className="whitespace-nowrap text-xs font-semibold text-gray-700 dark:text-gray-200"
                   >
                     {header}
                   </TableHead>
@@ -584,12 +606,12 @@ const TableReport = () => {
               {data.map((item, index) => (
                 <TableRow
                   key={index}
-                  className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}
+                  className={index % 2 === 0 ? "bg-white dark:bg-zinc-900" : "bg-gray-50 dark:bg-zinc-800"}
                 >
                   {Object.values(item).map((val, idx) => (
                     <TableCell
                       key={idx}
-                      className="whitespace-nowrap px-2 py-1 text-xs"
+                      className="whitespace-nowrap px-2 py-1 text-xs dark:text-gray-300"
                     >
                       {val === "" || val === null ? "-" : val}
                     </TableCell>

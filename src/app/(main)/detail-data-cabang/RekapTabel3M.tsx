@@ -42,18 +42,33 @@ const RekapTabel3M = () => {
     "SAMSAT SALATIGA": "samsatsalatiga",
   };
 
+  useEffect(() => {
+    handleSubmit();
+  }, []);
+
+  const BASE_URL = process.env.NEXT_PUBLIC_API_BASE || "/api/rekap";
+
   const handleSubmit = async () => {
     setLoading(true);
     setError(null);
 
-    try {
-      const allData: ReportData[] = [];
-      for (const [loketName, endpoint] of Object.entries(endpointMap)) {
-        const res = await fetch(`http://localhost:8080/${endpoint}`);
-        if (!res.ok) throw new Error(`Gagal fetch dari ${endpoint}`);
+    const endpoints = Object.values(endpointMap);
 
-        const result = await res.json();
-        const rawData = result.data || [];
+    try {
+      const bulkRes = await fetch("/api/bulk-rekap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoints }),
+      });
+
+      if (!bulkRes.ok) throw new Error("Gagal mengunduh data massal");
+
+      const bulkData = await bulkRes.json();
+      const allData: ReportData[] = [];
+
+      bulkData.results.forEach((res: any) => {
+        const loketName = Object.keys(endpointMap).find(key => endpointMap[key] === res.endpoint) || res.endpoint;
+        const rawData = res.data || [];
 
         const withLoket = rawData.map((item: any, index: number) => ({
           no: index + 1,
@@ -61,12 +76,12 @@ const RekapTabel3M = () => {
           iwkbu_ti_tgl_transaksi: item.iwkbu_ti_tgl_transaksi,
           iwkbu_ti_nopol: item.iwkbu_ti_nopol,
           iwkbu_ti_rupiah_penerimaan: item.iwkbu_ti_rupiah_penerimaan,
-          iwkbu_to_tgl_transaksi: item.iwkbu_to_tgl_transaksi,
-          iwkbu_to_nopol: item.iwkbu_to_nopol,
-          iwkbu_to_rupiah_penerimaan: item.iwkbu_to_rupiah_penerimaan,
+          iwkbu_tl_tgl_transaksi: item.iwkbu_tl_tgl_transaksi,
+          iwkbu_tl_nopol: item.iwkbu_tl_nopol,
+          iwkbu_tl_rupiah_penerimaan: item.iwkbu_tl_rupiah_penerimaan,
         }));
         allData.push(...withLoket);
-      }
+      });
 
       // Filter berdasarkan tanggal
       const start = new Date(tanggalAwal);
@@ -85,16 +100,13 @@ const RekapTabel3M = () => {
     } finally {
       setLoading(false);
     }
-    useEffect(() => {
-      handleSubmit();
-    });
   };
   return (
     <div className="">
       {/* Table Section */}
-      <div className="overflow-auto rounded-lg border shadow-md">
+      <div className="overflow-auto rounded-lg border shadow-md bg-white dark:bg-zinc-900">
         <Table className="min-w-[1200px] text-sm text-center">
-          <TableHeader className="bg-gray-100">
+          <TableHeader className="bg-gray-100 dark:bg-zinc-900">
             <TableRow>
               {[
                 "No",
@@ -106,7 +118,7 @@ const RekapTabel3M = () => {
               ].map((header, idx) => (
                 <TableHead
                   key={idx}
-                  className="whitespace-nowrap text-xs font-semibold text-gray-700"
+                  className="whitespace-nowrap text-xs font-semibold text-gray-700 dark:text-gray-200"
                 >
                   {header}
                 </TableHead>
@@ -115,15 +127,15 @@ const RekapTabel3M = () => {
           </TableHeader>
           <TableBody>
             {data.map((item) => (
-              <TableRow key={`${item.loket}-${item.no}`}>
-                <TableCell>{item.no}</TableCell>
-                <TableCell>{item.loket}</TableCell>
-                <TableCell>{item.iwkbu_tl_nopol}</TableCell>
-                <TableCell>
+              <TableRow key={`${item.loket}-${item.no}`} className="hover:bg-gray-50 dark:hover:bg-zinc-700">
+                <TableCell className="dark:text-white">{item.no}</TableCell>
+                <TableCell className="dark:text-white">{item.loket}</TableCell>
+                <TableCell className="dark:text-white">{item.iwkbu_tl_nopol}</TableCell>
+                <TableCell className="dark:text-white">
                   {item.iwkbu_tl_rupiah_penerimaan.toLocaleString()}
                 </TableCell>
-                <TableCell>{item.iwkbu_ti_nopol}</TableCell>
-                <TableCell>
+                <TableCell className="dark:text-white">{item.iwkbu_ti_nopol}</TableCell>
+                <TableCell className="dark:text-white">
                   {item.iwkbu_ti_rupiah_penerimaan.toLocaleString()}
                 </TableCell>
               </TableRow>

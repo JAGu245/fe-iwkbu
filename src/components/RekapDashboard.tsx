@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   Table,
   TableBody,
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
+import Cookies from "js-cookie";
 
 import { Button } from "./ui/button";
 
@@ -497,6 +498,21 @@ const loketMapping = [
   },
 ];
 
+
+
+// Helper function to check if data exists (not empty/null/undefined)
+const hasData = (nopol: string | undefined | null): boolean => {
+  if (!nopol) return false;
+  const cleanNopol = nopol.trim();
+  return cleanNopol !== "" && cleanNopol !== "-";
+};
+
+// Helper function to check if NOPOL is NIHIL
+const isNihil = (nopol: string | undefined | null): boolean => {
+  if (!nopol) return false;
+  return nopol.trim().toUpperCase() === "NIHIL";
+};
+
 const RekapDashboard = ({
   onDateRangeChange,
   initialStartDate,
@@ -505,7 +521,7 @@ const RekapDashboard = ({
   const [data, setData] = useState<{ endpoint: string; data: ReportData[] }[]>(
     []
   );
-  const [rekapData, setRekapData] = useState<RekapRow[]>([]);
+  // const [rekapData, setRekapData] = useState<RekapRow[]>([]); // Replaced by useMemo
   const [month, setMonth] = useState<number>(5);
   // const [loading, setLoading] = useState(true);
   // const [loading, setLoading] = useState<LoadingState | null>({
@@ -520,6 +536,8 @@ const RekapDashboard = ({
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [useDateRange, setUseDateRange] = useState(true);
+  const [appliedStartDate, setAppliedStartDate] = useState<Date | null>(null);
+  const [appliedEndDate, setAppliedEndDate] = useState<Date | null>(null);
 
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(
     {}
@@ -541,8 +559,9 @@ const RekapDashboard = ({
     if (!startDate || !endDate) return;
 
     setUseDateRange(true);
+    setAppliedStartDate(startDate);
+    setAppliedEndDate(endDate);
     onDateRangeChange(startDate, endDate);
-    generateRekap();
   };
 
   const formatRupiah = (amount: number) => {
@@ -572,16 +591,15 @@ const RekapDashboard = ({
       type === "gap"
         ? row.gapDetails
         : row.memastikanDetails.map((item) => ({
-            Nopol: item.nopol,
-            Tanggal_Transaksi: item.tgl_transaksi,
-            Rupiah: item.rupiah,
-            Loket: item.loket || row.loketKantor,
-          }));
+          Nopol: item.nopol,
+          Tanggal_Transaksi: item.tgl_transaksi,
+          Rupiah: item.rupiah,
+          Loket: item.loket || row.loketKantor,
+        }));
 
     if (dataToExport.length === 0) {
       alert(
-        `Tidak ada data ${
-          type === "gap" ? "GAP" : "Memastikan"
+        `Tidak ada data ${type === "gap" ? "GAP" : "Memastikan"
         } untuk diexport.`
       );
       return;
@@ -612,24 +630,26 @@ const RekapDashboard = ({
     setError(null);
     setData([]);
 
-    let fetchedResponses: { endpoint: string; data: ReportData[] }[] = [];
+    const endpoints = loketMapping.map((item) => item.endpoint.replace(`${BASE_URL}/`, ""));
+
     try {
-      setLoading("Mengambil data dari semua loket...");
-      const fetchPromises = loketMapping.map(async (loket) => {
-        try {
-          const response = await fetch(loket.endpoint);
-          if (!response.ok) {
-            console.log(`Gagal mengambil data dari ${loket.endpoint}`);
-            return { endpoint: loket.endpoint, data: [] };
-          }
-          const result = await response.json();
-          return { endpoint: loket.endpoint, data: result.data || [] };
-        } catch (error) {
-          console.log(`Error pada ${loket.endpoint}:`, error);
-          return { endpoint: loket.endpoint, data: [] };
-        }
+      setLoading("Mengunduh data secara massal...");
+
+      const bulkRes = await fetch("/api/bulk-rekap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoints }),
       });
-      const responses = await Promise.all(fetchPromises);
+
+      if (!bulkRes.ok) {
+        throw new Error("Gagal mengunduh data secara massal");
+      }
+
+      const bulkData = await bulkRes.json();
+      const responses = bulkData.results.map((res: any) => ({
+        endpoint: `${BASE_URL}/${res.endpoint}`,
+        data: res.data || [],
+      }));
 
       setLoading("Memproses dan menampilkan data...");
       setData(responses);
@@ -639,76 +659,80 @@ const RekapDashboard = ({
       setError(err instanceof Error ? err.message : "Terjadi Kesalahan");
       setLoading(null);
     }
-    // try {
-    //   // Loop melalui setiap loket satu per satu
-    //   for (let i = 0; i < loketMapping.length; i++) {
-    //     const loket = loketMapping[i];
-
-    //     // Update progress dan pesan untuk setiap fetch
-    //     const progress = Math.round(((i + 1) / loketMapping.length) * 100);
-    //     setLoading({
-    //       message: `Memuat data untuk ${loket.childLoket}...`,
-    //       progress: progress,
-    //     });
-
-    //     // Ambil data untuk satu loket
-    //     const response = await fetch(loket.endpoint);
-    //     if (!response.ok) {
-    //       console.error(`Gagal mengambil data dari ${loket.endpoint}`);
-    //       // Tetap lanjutkan meskipun satu gagal, dengan data kosong
-    //       fetchedResponses.push({ endpoint: loket.endpoint, data: [] });
-    //       continue; // Lanjut ke loket berikutnya
-    //     }
-
-    //     const result = await response.json();
-    //     fetchedResponses.push({
-    //       endpoint: loket.endpoint,
-    //       data: result.data || [],
-    //     });
-
-    //     // Perbarui state data utama secara real-time
-    //     setData([...fetchedResponses]);
-    //   }
-
-    //   // Selesaikan proses loading
-    //   setLoading({ message: "Menyelesaikan...", progress: 100 });
-    //   setTimeout(() => setLoading(null), 500); // Beri jeda untuk animasi 100%
-    // } catch (err) {
-    //   setError(err instanceof Error ? err.message : "Terjadi Kesalahan");
-    //   setLoading(null);
-    // }
   };
 
-  const generateRekap = () => {
+  const rekapData = useMemo(() => {
     if (!data.length) {
-      console.log("Data masih kosong");
-      return;
+      return [];
     }
 
     const monthStr = month.toString().padStart(2, "0");
     const result: RekapRow[] = [];
     let groupSubTotal: RekapRow | null = null;
 
-    // Helper function to compare dates ignoring year
-    const isDateInRange = (
-      dateStr: string,
-      start: Date | null,
-      end: Date | null
-    ) => {
-      if (!start || !end || !dateStr) return false;
+    // Optimization: Pre-calculate date boundaries
+    // We convert to time values (numbers) for faster comparison than creating new Date objects in loops
+    let startLimit = 0;
+    let endLimit = 0;
+    let tlStartLimit = 0;
+    let tlEndLimit = 0;
+    let tiStartLimit = 0;
+    let tiEndLimit = 0;
 
+    // Helper to parse DD/MM/YYYY to timestamp
+    const parseToTimestamp = (dateStr: string): number | null => {
+      if (!dateStr) return null;
       const parts = dateStr.split("/");
-      if (parts.length < 2) return false;
+      if (parts.length < 3) return null;
+      // Note: Months are 0-indexed in JS Date
+      return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])).getTime();
+    };
 
-      const day = parseInt(parts[0]);
-      const month = parseInt(parts[1]);
+    if (appliedStartDate && appliedEndDate) {
+      // Reset hours for accurate comparison
+      const s = new Date(appliedStartDate.getFullYear(), appliedStartDate.getMonth(), appliedStartDate.getDate());
+      const e = new Date(appliedEndDate.getFullYear(), appliedEndDate.getMonth(), appliedEndDate.getDate());
+      startLimit = s.getTime();
+      endLimit = e.getTime();
+    }
 
-      // Use fixed year (2000) for comparison
-      const date = new Date(2000, month - 1, day);
-      const startDate = new Date(2000, start.getMonth(), start.getDate());
-      const endDate = new Date(2000, end.getMonth(), end.getDate());
+    // Define Date Ranges for TL (Check-In) and TI (Check-Out)
+    const today = new Date();
+    const currentRealYear = today.getFullYear();
+    const selectedYear = appliedStartDate ? appliedStartDate.getFullYear() : currentRealYear;
 
-      return date >= startDate && date <= endDate;
+    let tlStartDate = appliedStartDate;
+    let tlEndDate = appliedEndDate;
+    let tiStartDate = appliedStartDate;
+    let tiEndDate = appliedEndDate;
+
+    // RULE: If data is pulled for ANY year:
+    // - Check-In (TL) uses Year - 1.
+    // - Check-Out (TI) uses Selected Year (Current).
+    if (appliedStartDate && appliedEndDate) {
+      const tlStart = new Date(appliedStartDate);
+      tlStart.setFullYear(appliedStartDate.getFullYear() - 1);
+      tlStartDate = tlStart;
+
+      const tlEnd = new Date(appliedEndDate);
+      tlEnd.setFullYear(appliedEndDate.getFullYear() - 1);
+      tlEndDate = tlEnd;
+    }
+
+    // Convert boundaries to timestamps for O(1) comparison in loops
+    if (tlStartDate && tlEndDate) {
+      tlStartLimit = new Date(tlStartDate.getFullYear(), tlStartDate.getMonth(), tlStartDate.getDate()).getTime();
+      tlEndLimit = new Date(tlEndDate.getFullYear(), tlEndDate.getMonth(), tlEndDate.getDate()).getTime();
+    }
+    if (tiStartDate && tiEndDate) {
+      tiStartLimit = new Date(tiStartDate.getFullYear(), tiStartDate.getMonth(), tiStartDate.getDate()).getTime();
+      tiEndLimit = new Date(tiEndDate.getFullYear(), tiEndDate.getMonth(), tiEndDate.getDate()).getTime();
+    }
+
+    // Optimized check function
+    const isDateInRangeOptimized = (dateTimestamp: number | null, rangeStart: number, rangeEnd: number) => {
+      if (dateTimestamp === null) return false;
+      return dateTimestamp >= rangeStart && dateTimestamp <= rangeEnd;
     };
 
     const finalizeAndPushSubTotal = (subTotal: RekapRow) => {
@@ -770,26 +794,43 @@ const RekapDashboard = ({
       const sisaNopolSet = new Set<string>();
       let sisaRupiah = 0;
 
+      // 1. Pre-process dates to timestamps once per item
+      // This creates a temporary map or we just call parseToTimestamp in the loop. 
+      // Since we iterate multiple times, let's just parse efficiently.
+
       // Process checkin (TL) data
       endpointData.forEach((item) => {
         if (item.iwkbu_tl_tgl_transaksi) {
-          const [day, mon] = item.iwkbu_tl_tgl_transaksi.split("/");
+          const parts = item.iwkbu_tl_tgl_transaksi.split("/");
+          // parts[1] is month
 
-          // Check month filter or date range
-          const monthMatch = mon === monthStr;
-          const dateRangeMatch =
-            useDateRange &&
-            isDateInRange(item.iwkbu_tl_tgl_transaksi, startDate, endDate);
+          const monthMatch = parts[1] === monthStr;
+
+          let dateRangeMatch = false;
+          if (useDateRange && tlStartLimit > 0) {
+            const ts = parseToTimestamp(item.iwkbu_tl_tgl_transaksi);
+            dateRangeMatch = isDateInRangeOptimized(ts, tlStartLimit, tlEndLimit);
+          }
 
           if (
             (!useDateRange && monthMatch) ||
             (useDateRange && dateRangeMatch)
           ) {
-            rekap.checkinNopol += item.kode_nopol_co || 0;
-            rekap.checkinRupiah += item.iwkbu_tl_rupiah_penerimaan || 0;
-            if (item.iwkbu_tl_bulan_maju > 0) {
-              totalBulanMajuTL += item.iwkbu_tl_bulan_maju;
-              countNopolBulanMajuTL++;
+            // Count data if exists (including NIHIL which shows as 0)
+            if (hasData(item.iwkbu_tl_nopol)) {
+              // If NIHIL, explicitly add 0; otherwise use actual value
+              if (isNihil(item.iwkbu_tl_nopol)) {
+                // NIHIL counts as present data but with value 0
+                rekap.checkinNopol += 0;
+                rekap.checkinRupiah += 0;
+              } else {
+                rekap.checkinNopol += item.kode_nopol_co || 0;
+                rekap.checkinRupiah += item.iwkbu_tl_rupiah_penerimaan || 0;
+              }
+              if (item.iwkbu_tl_bulan_maju > 0) {
+                totalBulanMajuTL += item.iwkbu_tl_bulan_maju;
+                countNopolBulanMajuTL++;
+              }
             }
           }
         }
@@ -798,17 +839,21 @@ const RekapDashboard = ({
       const checkinNopolSet = new Set<string>();
       endpointData.forEach((item) => {
         if (item.iwkbu_tl_tgl_transaksi) {
-          const [day, mon] = item.iwkbu_tl_tgl_transaksi.split("/");
-          const monthMatch = mon === monthStr;
-          const dateRangeMatch =
-            useDateRange &&
-            isDateInRange(item.iwkbu_tl_tgl_transaksi, startDate, endDate);
+          const parts = item.iwkbu_tl_tgl_transaksi.split("/");
+          const monthMatch = parts[1] === monthStr;
+          let dateRangeMatch = false;
+
+          if (useDateRange && tlStartLimit > 0) {
+            const ts = parseToTimestamp(item.iwkbu_tl_tgl_transaksi);
+            dateRangeMatch = isDateInRangeOptimized(ts, tlStartLimit, tlEndLimit);
+          }
 
           if (
             (!useDateRange && monthMatch) ||
             (useDateRange && dateRangeMatch)
           ) {
-            if (item.iwkbu_tl_nopol) {
+            // Only add nopols with data (including NIHIL) to the set
+            if (hasData(item.iwkbu_tl_nopol)) {
               checkinNopolSet.add(item.iwkbu_tl_nopol);
             }
           }
@@ -818,81 +863,79 @@ const RekapDashboard = ({
       // Process checkout (TI) data
       endpointData.forEach((item) => {
         if (item.iwkbu_ti_tgl_transaksi) {
-          const [day, mon] = item.iwkbu_ti_tgl_transaksi.split("/");
+          const parts = item.iwkbu_ti_tgl_transaksi.split("/");
+          const monthMatch = parts[1] === monthStr;
+          let dateRangeMatch = false;
 
-          // Check month filter or date range
-          const monthMatch = mon === monthStr;
-          const dateRangeMatch =
-            useDateRange &&
-            isDateInRange(item.iwkbu_ti_tgl_transaksi, startDate, endDate);
+          if (useDateRange && tiStartLimit > 0) {
+            const ts = parseToTimestamp(item.iwkbu_ti_tgl_transaksi);
+            dateRangeMatch = isDateInRangeOptimized(ts, tiStartLimit, tiEndLimit);
+          }
 
           if (
             (!useDateRange && monthMatch) ||
             (useDateRange && dateRangeMatch)
           ) {
-            rekap.checkoutNopol += item.kode_nopol_ci || 0;
-            rekap.checkoutRupiah += item.iwkbu_ti_rupiah_penerimaan || 0;
-
-            const isMenambahkan =
-              item.tl_keterangan_konversi_iwkbu === "Armada Baru" ||
-              item.tl_keterangan_konversi_iwkbu === "Mutasi Masuk";
-
-            const isMemastikan = checkinNopolSet.has(item.iwkbu_ti_nopol);
-            // const isMemastikan = endpointData.some(
-            //   (ciItem) =>
-            //     ciItem.iwkbu_tl_nopol === item.iwkbu_ti_nopol &&
-            //     ciItem.iwkbu_tl_tgl_transaksi &&
-            //     ((!useDateRange &&
-            //       ciItem.iwkbu_tl_tgl_transaksi.split("/")[1] === monthStr) ||
-            //       (useDateRange &&
-            //         isDateInRange(
-            //           ciItem.iwkbu_tl_tgl_transaksi,
-            //           startDate,
-            //           endDate
-            //         )))
-            // );
-
-            if (isMenambahkan) {
-              menambahkanNopol += 1;
-              menambahkanRupiah += item.iwkbu_ti_rupiah_penerimaan || 0;
-            }
-
-            if (isMemastikan && item.iwkbu_ti_nopol) {
-              memastikanDetails.push({
-                nopol: item.iwkbu_ti_nopol,
-                tgl_transaksi: item.iwkbu_ti_tgl_transaksi,
-                rupiah: item.iwkbu_ti_rupiah_penerimaan || 0,
-                loket: loket.childLoket,
-              });
-              // if (!matchedNopol.has(item.iwkbu_ti_nopol)) {
-              //   matchedNopol.add(item.iwkbu_ti_nopol);
-              //   matchedRupiah += item.iwkbu_ti_rupiah_penerimaan || 0;
-              // }
-            }
-            const processedNopols = new Set<string>();
-            endpointData.forEach((ciItem) => {
-              if (
-                ciItem.iwkbu_ti_nopol &&
-                ((isMemastikan && matchedNopol.has(ciItem.iwkbu_ti_nopol)) ||
-                  (isMenambahkan &&
-                    (ciItem.tl_keterangan_konversi_iwkbu === "Armada Baru" ||
-                      ciItem.tl_keterangan_konversi_iwkbu === "Mutasi Masuk")))
-              ) {
-                processedNopols.add(ciItem.iwkbu_ti_nopol);
+            // Count data if exists (including NIHIL which shows as 0)
+            if (hasData(item.iwkbu_ti_nopol)) {
+              // If NIHIL, explicitly add 0; otherwise use actual value
+              if (isNihil(item.iwkbu_ti_nopol)) {
+                // NIHIL counts as present data but with value 0
+                rekap.checkoutNopol += 0;
+                rekap.checkoutRupiah += 0;
+              } else {
+                rekap.checkoutNopol += item.kode_nopol_ci || 0;
+                rekap.checkoutRupiah += item.iwkbu_ti_rupiah_penerimaan || 0;
               }
-            });
 
-            if (
-              item.iwkbu_ti_nopol &&
-              !processedNopols.has(item.iwkbu_ti_nopol)
-            ) {
-              sisaNopolSet.add(item.iwkbu_ti_nopol);
-              sisaRupiah += item.iwkbu_ti_rupiah_penerimaan || 0;
-            }
+              const isMenambahkan =
+                item.tl_keterangan_konversi_iwkbu === "Armada Baru" ||
+                item.tl_keterangan_konversi_iwkbu === "Mutasi Masuk";
 
-            if (item.iwkbu_ti_bulan_maju > 0) {
-              totalBulanMajuTI += item.iwkbu_ti_bulan_maju;
-              countNopolBulanMajuTI++;
+              // Check against checkin set (includes NIHIL data)
+              const isMemastikan = checkinNopolSet.has(item.iwkbu_ti_nopol);
+
+              if (isMenambahkan && !isNihil(item.iwkbu_ti_nopol)) {
+                menambahkanNopol += 1;
+                menambahkanRupiah += item.iwkbu_ti_rupiah_penerimaan || 0;
+              }
+
+              if (isMemastikan && item.iwkbu_ti_nopol && !isNihil(item.iwkbu_ti_nopol)) {
+                memastikanDetails.push({
+                  nopol: item.iwkbu_ti_nopol,
+                  tgl_transaksi: item.iwkbu_ti_tgl_transaksi,
+                  rupiah: item.iwkbu_ti_rupiah_penerimaan || 0,
+                  loket: loket.childLoket,
+                });
+              }
+
+              const processedNopols = new Set<string>();
+              endpointData.forEach((ciItem) => {
+                if (
+                  hasData(ciItem.iwkbu_ti_nopol) &&
+                  !isNihil(ciItem.iwkbu_ti_nopol) &&
+                  ((isMemastikan && matchedNopol.has(ciItem.iwkbu_ti_nopol)) ||
+                    (isMenambahkan &&
+                      (ciItem.tl_keterangan_konversi_iwkbu === "Armada Baru" ||
+                        ciItem.tl_keterangan_konversi_iwkbu === "Mutasi Masuk")))
+                ) {
+                  processedNopols.add(ciItem.iwkbu_ti_nopol);
+                }
+              });
+
+              if (
+                item.iwkbu_ti_nopol &&
+                !isNihil(item.iwkbu_ti_nopol) &&
+                !processedNopols.has(item.iwkbu_ti_nopol)
+              ) {
+                sisaNopolSet.add(item.iwkbu_ti_nopol);
+                sisaRupiah += item.iwkbu_ti_rupiah_penerimaan || 0;
+              }
+
+              if (item.iwkbu_ti_bulan_maju > 0) {
+                totalBulanMajuTI += item.iwkbu_ti_bulan_maju;
+                countNopolBulanMajuTI++;
+              }
             }
           }
         }
@@ -901,47 +944,49 @@ const RekapDashboard = ({
       // Process gap details (checkin nopols not in checkout)
       endpointData.forEach((item) => {
         if (item.iwkbu_tl_tgl_transaksi) {
-          const [day, mon] = item.iwkbu_tl_tgl_transaksi.split("/");
+          const parts = item.iwkbu_tl_tgl_transaksi.split("/");
+          const monthMatch = parts[1] === monthStr;
+          let dateRangeMatch = false;
 
-          // Check month filter or date range
-          const monthMatch = mon === monthStr;
-          const dateRangeMatch =
-            useDateRange &&
-            isDateInRange(item.iwkbu_tl_tgl_transaksi, startDate, endDate);
+          if (useDateRange && tlStartLimit > 0) {
+            const ts = parseToTimestamp(item.iwkbu_tl_tgl_transaksi);
+            dateRangeMatch = isDateInRangeOptimized(ts, tlStartLimit, tlEndLimit);
+          }
 
           if (
             (!useDateRange && monthMatch) ||
             (useDateRange && dateRangeMatch)
           ) {
-            const foundInCheckout = endpointData.some(
-              (tiItem) =>
-                tiItem.iwkbu_ti_nopol === item.iwkbu_tl_nopol &&
-                tiItem.iwkbu_ti_tgl_transaksi &&
-                ((!useDateRange &&
-                  tiItem.iwkbu_ti_tgl_transaksi.split("/")[1] === monthStr) ||
-                  (useDateRange &&
-                    isDateInRange(
-                      tiItem.iwkbu_ti_tgl_transaksi,
-                      startDate,
-                      endDate
-                    )))
-            );
+            // Only process if data exists and is not NIHIL
+            if (hasData(item.iwkbu_tl_nopol) && !isNihil(item.iwkbu_tl_nopol)) {
+              const foundInCheckout = endpointData.some(
+                (tiItem) => {
+                  const tiNopolCheck = hasData(tiItem.iwkbu_ti_nopol) &&
+                    !isNihil(tiItem.iwkbu_ti_nopol) &&
+                    tiItem.iwkbu_ti_nopol === item.iwkbu_tl_nopol &&
+                    tiItem.iwkbu_ti_tgl_transaksi;
 
-            if (!foundInCheckout) {
-              gapDetails.push({
-                nopol: item.iwkbu_tl_nopol,
-                keterangan: item.tl_keterangan_konversi_iwkbu || "-",
-                rupiah: item.iwkbu_tl_rupiah_penerimaan || 0,
-                tgl_transaksi: item.iwkbu_tl_tgl_transaksi,
-                loket: loket.childLoket,
-              });
+                  if (!tiNopolCheck) return false;
 
-              // if (groupSubTotal) {
-              //   groupSubTotal.gapDetails.push({
-              //     ...gapDetails[gapDetails.length - 1],
-              //     loket: loket.childLoket,
-              //   });
-              // }
+                  if (!useDateRange) {
+                    return tiItem.iwkbu_ti_tgl_transaksi.split("/")[1] === monthStr;
+                  } else if (tiStartLimit > 0) {
+                    const ts = parseToTimestamp(tiItem.iwkbu_ti_tgl_transaksi);
+                    return isDateInRangeOptimized(ts, tiStartLimit, tiEndLimit);
+                  }
+                  return false;
+                }
+              );
+
+              if (!foundInCheckout) {
+                gapDetails.push({
+                  nopol: item.iwkbu_tl_nopol,
+                  keterangan: item.tl_keterangan_konversi_iwkbu || "-",
+                  rupiah: item.iwkbu_tl_rupiah_penerimaan || 0,
+                  tgl_transaksi: item.iwkbu_tl_tgl_transaksi,
+                  loket: loket.childLoket,
+                });
+              }
             }
           }
         }
@@ -952,14 +997,9 @@ const RekapDashboard = ({
         (sum, detail) => sum + detail.rupiah,
         0
       );
-      const uniqueMemastikanNopol = new Set(
-        memastikanDetails.map((d) => d.nopol)
-      );
       // Hapus kalkulasi Nopol unik dan gunakan total memastikanNopol secara langsung.
       rekap.memastikanPersen =
         rekap.checkinNopol > 0 ? rekap.memastikanNopol / rekap.checkinNopol : 0;
-      // rekap.memastikanPersen =
-      //   rekap.checkoutNopol > 0 ? matchedNopol.size / rekap.checkoutNopol : 0;
       rekap.menambahkanNopol = menambahkanNopol;
       rekap.menambahkanRupiah = menambahkanRupiah;
       rekap.gapNopol = gapDetails.length;
@@ -980,19 +1020,26 @@ const RekapDashboard = ({
       const isDataEffectivelyEmpty =
         rekap.checkinNopol === 0 || rekap.checkoutNopol === 0;
       if (isDataEffectivelyEmpty) {
-        const relevantDataForLoket = endpointData.filter((item) => {
-          const dateStr =
-            item.iwkbu_tl_tgl_transaksi || item.iwkbu_ti_tgl_transaksi;
-          if (!dateStr) return false;
-          return useDateRange && isDateInRange(dateStr, startDate, endDate);
+        // Find if ANY record in the selected TI range is marked as NIHIL
+        const hasNihilRecord = endpointData.some((item) => {
+          if (!item.iwkbu_ti_tgl_transaksi) return false;
+
+          let isInRange = false;
+          if (tiStartLimit > 0) {
+            const ts = parseToTimestamp(item.iwkbu_ti_tgl_transaksi);
+            isInRange = isDateInRangeOptimized(ts, tiStartLimit, tiEndLimit);
+          }
+
+          if (!isInRange) return false;
+
+          // Check for explicit NIHIL keywords in various fields
+          const nopol = String(item.iwkbu_ti_nopol || "").trim().toUpperCase();
+          const desc = String(item.tl_keterangan_konversi_iwkbu || "").trim().toUpperCase();
+
+          return nopol === 'NIHIL' || desc.includes('NIHIL');
         });
 
-        if (
-          relevantDataForLoket.some(
-            (item) =>
-              item.tl_keterangan_konversi_iwkbu?.toUpperCase() === "NIHIL"
-          )
-        ) {
+        if (hasNihilRecord) {
           rekap.placeholderChar = "0";
         }
       }
@@ -1118,7 +1165,7 @@ const RekapDashboard = ({
       memastikanPersen:
         subTotalRows.reduce((sum, row) => sum + row.checkinNopol, 0) > 0
           ? subTotalRows.reduce((sum, row) => sum + row.memastikanNopol, 0) /
-            subTotalRows.reduce((sum, row) => sum + row.checkinNopol, 0)
+          subTotalRows.reduce((sum, row) => sum + row.checkinNopol, 0)
           : 0,
       menambahkanNopol: subTotalRows.reduce(
         (sum, row) => sum + row.menambahkanNopol,
@@ -1130,7 +1177,7 @@ const RekapDashboard = ({
       ),
       mengupayakan: Math.round(
         subTotalRows.reduce((sum, row) => sum + row.mengupayakan, 0) /
-          subTotalRows.filter((row) => row.mengupayakan > 0).length
+        (subTotalRows.filter((row) => row.mengupayakan > 0).length || 1)
       ),
       gapNopol: subTotalRows.reduce((sum, row) => sum + row.gapNopol, 0),
       sisaNopol: subTotalRows.reduce((sum, row) => sum + row.sisaNopol, 0),
@@ -1142,8 +1189,8 @@ const RekapDashboard = ({
     };
 
     result.push(grandTotal);
-    setRekapData(result);
-  };
+    return result;
+  }, [data, month, appliedStartDate, appliedEndDate, useDateRange]);
 
   useEffect(() => {
     const today = new Date();
@@ -1151,6 +1198,8 @@ const RekapDashboard = ({
 
     setStartDate(firstDayOfMonth);
     setEndDate(today);
+    setAppliedStartDate(firstDayOfMonth);
+    setAppliedEndDate(today);
     setMonth(today.getMonth() + 1);
     setUseDateRange(true);
 
@@ -1160,11 +1209,7 @@ const RekapDashboard = ({
     fetchData();
   }, []);
 
-  useEffect(() => {
-    if (data.length > 0) {
-      generateRekap();
-    }
-  }, [data, month]);
+
 
   const handleDetail = (row: RekapRow, type: "gap" | "memastikan") => {
     setSelectedRow(row);
@@ -1191,7 +1236,7 @@ const RekapDashboard = ({
   return (
     <div className="space-y-4">
       <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-end gap-4 rounded-md border p-4 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-4 rounded-md border p-4 shadow-sm bg-white dark:bg-zinc-900">
           <div className="w-full">
             <label className="text-sm font-medium mb-1 block">
               Filter Tanggal
@@ -1281,36 +1326,36 @@ const RekapDashboard = ({
         </div>
       </div>
 
-      <div className="overflow-auto rounded-lg border shadow-md">
+      <div className="overflow-auto rounded-lg border shadow-md bg-white dark:bg-zinc-900">
         <Table>
-          <TableHeader className="bg-gray-100">
+          <TableHeader className="bg-gray-100 dark:bg-zinc-900">
             <TableRow>
-              <TableHead className="text-gray-800 w-[50px] text-center">
+              <TableHead className="text-gray-800 dark:text-gray-200 w-[50px] text-center">
                 NO
               </TableHead>
-              <TableHead className="text-gray-800 min-w-[220px]">
+              <TableHead className="text-gray-800 dark:text-gray-200 min-w-[220px]">
                 LOKET KANTOR
               </TableHead>
-              <TableHead className="text-gray-800 min-w-[160px]">
+              <TableHead className="text-gray-800 dark:text-gray-200 min-w-[160px]">
                 PETUGAS
               </TableHead>
-              <TableHead colSpan={2} className="text-gray-800 text-center">
+              <TableHead colSpan={2} className="text-gray-800 dark:text-gray-200 text-center">
                 CHECK-IN
               </TableHead>
-              <TableHead colSpan={2} className="text-gray-800 text-center">
+              <TableHead colSpan={2} className="text-gray-800 dark:text-gray-200 text-center">
                 CHECK-OUT
               </TableHead>
-              <TableHead colSpan={3} className="text-gray-800 text-center">
+              <TableHead colSpan={3} className="text-gray-800 dark:text-gray-200 text-center">
                 MEMASTIKAN
               </TableHead>
-              <TableHead className="text-gray-800 text-center">GAP</TableHead>
-              <TableHead className="text-gray-800 text-center">
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">GAP</TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">
                 MENGUPAYAKAN
               </TableHead>
-              <TableHead colSpan={2} className="text-gray-800 text-center">
+              <TableHead colSpan={2} className="text-gray-800 dark:text-gray-200 text-center">
                 MENAMBAHKAN
               </TableHead>
-              <TableHead colSpan={2} className="text-gray-800 text-center">
+              <TableHead colSpan={2} className="text-gray-800 dark:text-gray-200 text-center">
                 PENERIMAAN LEBIH
               </TableHead>
             </TableRow>
@@ -1318,31 +1363,31 @@ const RekapDashboard = ({
               <TableHead></TableHead>
               <TableHead></TableHead>
               <TableHead></TableHead>
-              <TableHead className="text-gray-800 text-center">NOPOL</TableHead>
-              <TableHead className="text-gray-800 text-center">
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">NOPOL</TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">
                 RUPIAH
               </TableHead>
-              <TableHead className="text-gray-800 text-center">NOPOL</TableHead>
-              <TableHead className="text-gray-800 text-center">
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">NOPOL</TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">
                 RUPIAH
               </TableHead>
-              <TableHead className="text-gray-800 text-center">NOPOL</TableHead>
-              <TableHead className="text-gray-800 text-center">
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">NOPOL</TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">
                 RUPIAH
               </TableHead>
-              <TableHead className="text-gray-800 text-center">%</TableHead>
-              <TableHead className="text-gray-800 text-center">NOPOL</TableHead>
-              <TableHead className="text-gray-800 text-center">
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">%</TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">NOPOL</TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">
                 Rata-rata
                 <br />
                 Bulan Maju
               </TableHead>
-              <TableHead className="text-gray-800 text-center">NOPOL</TableHead>
-              <TableHead className="text-gray-800 text-center">
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">NOPOL</TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">
                 RUPIAH
               </TableHead>
-              <TableHead className="text-gray-800 text-center">NOPOL</TableHead>
-              <TableHead className="text-gray-800 text-center">
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">NOPOL</TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">
                 RUPIAH
               </TableHead>
             </TableRow>
@@ -1364,15 +1409,15 @@ const RekapDashboard = ({
                 return (
                   <TableRow
                     key={index}
-                    className="bg-gray-300 border-accent text-gray-700 font-medium cursor-pointer hover:bg-gray-300"
+                    className="bg-gray-300 dark:bg-zinc-700 border-accent text-gray-700 dark:text-gray-200 font-medium cursor-pointer hover:bg-gray-300 dark:hover:bg-zinc-600"
                     onClick={() => toggleGroup(row.loketKantor)}
                   >
                     <TableCell colSpan={16} className="px-2">
                       <div className="flex items-center gap-3 hover:underline">
                         {expandedGroups[row.loketKantor] ? (
-                          <Minus className="w-4 h-4 text-gray-700" />
+                          <Minus className="w-4 h-4 text-gray-700 dark:text-gray-200" />
                         ) : (
-                          <Plus className="w-4 h-4 text-gray-700" />
+                          <Plus className="w-4 h-4 text-gray-700 dark:text-gray-200" />
                         )}
                         <span>{row.loketKantor}</span>
                       </div>
@@ -1405,10 +1450,10 @@ const RekapDashboard = ({
                   key={index}
                   className={
                     isGrandTotal
-                      ? "bg-gray-200 font-bold text-gray-700 hover:bg-gray-200"
+                      ? "bg-gray-200 dark:bg-zinc-800 font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-zinc-700"
                       : isSubTotal
-                      ? "bg-gray-200 font-bold text-gray-700 hover:bg-gray-200"
-                      : ""
+                        ? "bg-gray-200 dark:bg-zinc-800 font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-zinc-700"
+                        : ""
                   }
                 >
                   <TableCell className="text-center">
@@ -1421,7 +1466,7 @@ const RekapDashboard = ({
                   >
                     {isSubTotal ? (
                       <div className="flex items-center pl-2">
-                        <CornerDownRight className="w-4 h-4 mr-2 text-gray-800" />
+                        <CornerDownRight className="w-4 h-4 mr-2 text-gray-800 dark:text-gray-200" />
                         <span>{row.loketKantor}</span>
                       </div>
                     ) : (
@@ -1433,36 +1478,35 @@ const RekapDashboard = ({
                     {row.checkinNopol > 0
                       ? row.checkinNopol
                       : isIndividualLoketRow
-                      ? row.placeholderChar
-                      : "-"}
+                        ? row.placeholderChar
+                        : "-"}
                   </TableCell>
                   <TableCell className="text-right">
                     {row.checkinRupiah > 0
                       ? formatRupiah(row.checkinRupiah)
                       : isIndividualLoketRow
-                      ? row.placeholderChar
-                      : "-"}
+                        ? row.placeholderChar
+                        : "-"}
                   </TableCell>
                   <TableCell className="text-center">
                     {row.checkoutNopol > 0
                       ? row.checkoutNopol
                       : isIndividualLoketRow
-                      ? row.placeholderChar
-                      : "-"}
+                        ? row.placeholderChar
+                        : "-"}
                   </TableCell>
                   <TableCell className="text-right">
                     {row.checkoutRupiah > 0
                       ? formatRupiah(row.checkoutRupiah)
                       : isIndividualLoketRow
-                      ? row.placeholderChar
-                      : "-"}
+                        ? row.placeholderChar
+                        : "-"}
                   </TableCell>
                   <TableCell
-                    className={`text-center ${
-                      row.memastikanNopol > 0
-                        ? "cursor-pointer hover:underline font-medium text-blue-400"
-                        : ""
-                    }`}
+                    className={`text-center ${row.memastikanNopol > 0
+                      ? "cursor-pointer hover:underline font-medium text-blue-400"
+                      : ""
+                      }`}
                     onClick={() => {
                       if (row.memastikanNopol > 0) {
                         handleDetail(row, "memastikan");
@@ -1472,8 +1516,8 @@ const RekapDashboard = ({
                     {row.memastikanNopol > 0
                       ? row.memastikanNopol
                       : isIndividualLoketRow
-                      ? row.placeholderChar
-                      : "-"}
+                        ? row.placeholderChar
+                        : "-"}
                   </TableCell>
                   <TableCell className="text-right">
                     {row.memastikanRupiah > 0
@@ -1484,15 +1528,14 @@ const RekapDashboard = ({
                     {row.memastikanPersen > 0
                       ? formatPercentage(row.memastikanPersen)
                       : isIndividualLoketRow
-                      ? row.placeholderChar
-                      : "-"}
+                        ? row.placeholderChar
+                        : "-"}
                   </TableCell>
                   <TableCell
-                    className={`text-center ${
-                      row.gapNopol !== 0 && !isGroupHeader && !isGrandTotal
-                        ? " cursor-pointer hover:underline font-medium text-blue-400"
-                        : ""
-                    }`}
+                    className={`text-center ${row.gapNopol !== 0 && !isGroupHeader && !isGrandTotal
+                      ? " cursor-pointer hover:underline font-medium text-blue-400"
+                      : ""
+                      }`}
                     onClick={() => {
                       if (
                         row.gapNopol !== 0 &&
@@ -1506,43 +1549,43 @@ const RekapDashboard = ({
                     {row.gapNopol !== 0
                       ? row.gapNopol
                       : isIndividualLoketRow
-                      ? row.placeholderChar
-                      : "-"}
+                        ? row.placeholderChar
+                        : "-"}
                   </TableCell>
                   <TableCell className="text-center">
                     {row.mengupayakan !== 0
                       ? row.mengupayakan
                       : isIndividualLoketRow
-                      ? row.placeholderChar
-                      : "-"}
+                        ? row.placeholderChar
+                        : "-"}
                   </TableCell>
                   <TableCell className="text-center">
                     {row.menambahkanNopol > 0
                       ? row.menambahkanNopol
                       : isIndividualLoketRow
-                      ? row.placeholderChar
-                      : "-"}
+                        ? row.placeholderChar
+                        : "-"}
                   </TableCell>
                   <TableCell className="text-right">
                     {row.menambahkanRupiah > 0
                       ? formatRupiah(row.menambahkanRupiah)
                       : isIndividualLoketRow
-                      ? row.placeholderChar
-                      : "-"}
+                        ? row.placeholderChar
+                        : "-"}
                   </TableCell>
                   <TableCell className="text-center">
                     {row.sisaNopol > 0
                       ? row.sisaNopol
                       : isIndividualLoketRow
-                      ? row.placeholderChar
-                      : "-"}
+                        ? row.placeholderChar
+                        : "-"}
                   </TableCell>
                   <TableCell className="text-right">
                     {row.sisaRupiah > 0
                       ? formatRupiah(row.sisaRupiah)
                       : isIndividualLoketRow
-                      ? row.placeholderChar
-                      : "-"}
+                        ? row.placeholderChar
+                        : "-"}
                   </TableCell>
                 </TableRow>
               );
@@ -1552,19 +1595,19 @@ const RekapDashboard = ({
       </div>
       {/* Detail Modal */}
       {selectedRow && (
-        <div className="fixed inset-0 bg-white/30 backdrop-blur-lg backdrop-saturate-150 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 bg-white/30 dark:bg-black/60 backdrop-blur-lg backdrop-saturate-150 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col border dark:border-zinc-800">
             {/* Header */}
-            <div className="flex justify-between items-start p-5 border-b">
+            <div className="flex justify-between items-start p-5 border-b dark:border-zinc-800">
               <div>
-                <h3 className="text-xl font-bold text-gray-800">
+                <h3 className="text-xl font-bold text-gray-800 dark:text-white">
                   {detailType === "gap"
                     ? `Detail GAP Nopol - ${selectedRow.loketKantor}`
                     : `Detail Memastikan Nopol - ${selectedRow.loketKantor}`}
                   {selectedRow.loketKantor === "SUB TOTAL" &&
                     " (Breakdown per Loket)"}
                 </h3>
-                <p className="text-sm text-gray-600 mt-1">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                   {selectedRow.petugas || "-"}
                 </p>
               </div>
@@ -1582,45 +1625,45 @@ const RekapDashboard = ({
             </div>
 
             {/* Stats Summary */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-5 bg-gray-50 border-b">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-5 bg-gray-50 dark:bg-zinc-950/50 border-b dark:border-zinc-800">
               {detailType === "gap" ? (
                 <>
-                  <div className="bg-white p-3 rounded-md shadow-sm">
-                    <p className="text-sm text-gray-600">CheckIn</p>
-                    <p className="text-lg font-semibold">
+                  <div className="bg-white dark:bg-zinc-800 p-3 rounded-md shadow-sm border dark:border-zinc-700">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">CheckIn</p>
+                    <p className="text-lg font-semibold dark:text-white">
                       {selectedRow.checkinNopol} nopol
                     </p>
                   </div>
-                  <div className="bg-white p-3 rounded-md shadow-sm">
-                    <p className="text-sm text-gray-600">Memastikan</p>
-                    <p className="text-lg font-semibold">
+                  <div className="bg-white dark:bg-zinc-800 p-3 rounded-md shadow-sm border dark:border-zinc-700">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Memastikan</p>
+                    <p className="text-lg font-semibold dark:text-white">
                       {selectedRow.memastikanNopol} nopol
                     </p>
                   </div>
-                  <div className="bg-white p-3 rounded-md shadow-sm">
-                    <p className="text-sm text-gray-600">Total GAP</p>
-                    <p className="text-lg font-semibold">
+                  <div className="bg-white dark:bg-zinc-800 p-3 rounded-md shadow-sm border dark:border-zinc-700">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Total GAP</p>
+                    <p className="text-lg font-semibold dark:text-white">
                       {selectedRow.gapNopol} nopol
                     </p>
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="bg-white p-3 rounded-md shadow-sm">
-                    <p className="text-sm text-gray-600">CheckIn</p>
-                    <p className="text-lg font-semibold">
+                  <div className="bg-white dark:bg-zinc-800 p-3 rounded-md shadow-sm border dark:border-zinc-700">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">CheckIn</p>
+                    <p className="text-lg font-semibold dark:text-white">
                       {selectedRow.checkinNopol} nopol
                     </p>
                   </div>
-                  <div className="bg-white p-3 rounded-md shadow-sm">
-                    <p className="text-sm text-gray-600">CheckOut</p>
-                    <p className="text-lg font-semibold">
+                  <div className="bg-white dark:bg-zinc-800 p-3 rounded-md shadow-sm border dark:border-zinc-700">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">CheckOut</p>
+                    <p className="text-lg font-semibold dark:text-white">
                       {selectedRow.checkoutNopol} nopol
                     </p>
                   </div>
-                  <div className="bg-white p-3 rounded-md shadow-sm">
-                    <p className="text-sm text-gray-600">Total Memastikan</p>
-                    <p className="text-lg font-semibold">
+                  <div className="bg-white dark:bg-zinc-800 p-3 rounded-md shadow-sm border dark:border-zinc-700">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Total Memastikan</p>
+                    <p className="text-lg font-semibold dark:text-white">
                       {selectedRow.memastikanNopol} nopol
                     </p>
                   </div>
@@ -1634,16 +1677,16 @@ const RekapDashboard = ({
                 selectedRow.loketKantor === "SUB TOTAL" ? (
                   /* Special view for SUB TOTAL rows */
                   <Table className="min-w-full">
-                    <TableHeader className="bg-gray-100 sticky top-0">
+                    <TableHeader className="bg-gray-100 dark:bg-zinc-800 sticky top-0">
                       <TableRow>
-                        <TableHead className="min-w-[200px]">Loket</TableHead>
-                        <TableHead className="min-w-[200px]">
+                        <TableHead className="min-w-[200px] dark:text-gray-200">Loket</TableHead>
+                        <TableHead className="min-w-[200px] dark:text-gray-200">
                           Keterangan
                         </TableHead>
-                        <TableHead className="text-center">
+                        <TableHead className="text-center dark:text-gray-200">
                           Jumlah Nopol
                         </TableHead>
-                        <TableHead className="text-right">
+                        <TableHead className="text-right dark:text-gray-200">
                           Total Nilai
                         </TableHead>
                       </TableRow>
@@ -1683,7 +1726,7 @@ const RekapDashboard = ({
                             <TableRow>
                               <TableCell
                                 colSpan={4}
-                                className="py-8 text-center text-gray-500"
+                                className="py-8 text-center text-gray-500 dark:text-gray-400"
                               >
                                 Tidak ada data detail GAP
                               </TableCell>
@@ -1705,14 +1748,14 @@ const RekapDashboard = ({
                               // Loket header row
                               <TableRow
                                 key={`loket-${loketIndex}`}
-                                className="bg-gray-50 font-medium"
+                                className="bg-gray-50 dark:bg-zinc-800/50 font-medium"
                               >
-                                <TableCell className="font-semibold">
+                                <TableCell className="font-semibold dark:text-gray-200">
                                   {loket}
                                 </TableCell>
                                 <TableCell
                                   colSpan={3}
-                                  className="font-semibold"
+                                  className="font-semibold dark:text-gray-300"
                                 >
                                   Total: {loketCount} Nopol (
                                   {formatRupiah(loketTotal)})
@@ -1727,12 +1770,12 @@ const RekapDashboard = ({
                                   <TableRow
                                     key={`keterangan-${loketIndex}-${keteranganIndex}`}
                                   >
-                                    <TableCell></TableCell>
-                                    <TableCell>{keterangan}</TableCell>
-                                    <TableCell className="text-center">
+                                    <TableCell className="dark:text-gray-400"></TableCell>
+                                    <TableCell className="dark:text-gray-300">{keterangan}</TableCell>
+                                    <TableCell className="text-center dark:text-gray-300">
                                       {count} Nopol
                                     </TableCell>
-                                    <TableCell className="text-right">
+                                    <TableCell className="text-right dark:text-gray-300">
                                       {formatRupiah(total)}
                                     </TableCell>
                                   </TableRow>
@@ -1745,13 +1788,13 @@ const RekapDashboard = ({
                     </TableBody>
                     {selectedRow.gapDetails.length > 0 && (
                       <TableFooter className="bg-gray-100 sticky bottom-0">
-                        <TableRow className="font-bold">
-                          <TableCell>Grand Total</TableCell>
+                        <TableRow className="font-bold border-none">
+                          <TableCell className="dark:text-white">Grand Total</TableCell>
                           <TableCell></TableCell>
-                          <TableCell className="text-center">
+                          <TableCell className="text-center dark:text-white">
                             {selectedRow.gapDetails.length} Nopol
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right dark:text-white">
                             {formatRupiah(
                               selectedRow.gapDetails.reduce(
                                 (sum, item) => sum + item.rupiah,
@@ -1766,7 +1809,7 @@ const RekapDashboard = ({
                 ) : (
                   /* Regular view for non-SUB TOTAL rows */
                   <Table className="min-w-full">
-                    <TableHeader className="bg-gray-100 sticky top-0">
+                    <TableHeader className="bg-gray-100 dark:bg-zinc-800 sticky top-0">
                       <TableRow>
                         <TableHead className="w-[60px] text-center">
                           No
@@ -1806,7 +1849,7 @@ const RekapDashboard = ({
                             <TableRow>
                               <TableCell
                                 colSpan={5}
-                                className="py-8 text-center text-gray-500"
+                                className="py-8 text-center text-gray-500 dark:text-gray-400"
                               >
                                 Tidak ada data detail GAP
                               </TableCell>
@@ -1827,11 +1870,11 @@ const RekapDashboard = ({
                               // Group header row
                               <TableRow
                                 key={`header-${groupIndex}`}
-                                className="bg-gray-50"
+                                className="bg-gray-50 dark:bg-zinc-800/50"
                               >
                                 <TableCell
                                   colSpan={5}
-                                  className="font-semibold text-gray-800"
+                                  className="font-semibold text-gray-800 dark:text-gray-200"
                                 >
                                   {keterangan} ({items.length} Nopol)
                                 </TableCell>
@@ -1843,19 +1886,19 @@ const RekapDashboard = ({
                                   <TableRow
                                     key={`item-${groupIndex}-${itemIndex}`}
                                   >
-                                    <TableCell className="py-2 font-medium text-center">
+                                    <TableCell className="py-2 font-medium text-center dark:text-gray-300">
                                       {rowIndex}
                                     </TableCell>
-                                    <TableCell className="py-2 font-mono text-center">
+                                    <TableCell className="py-2 font-mono text-center dark:text-gray-300">
                                       {item.nopol}
                                     </TableCell>
-                                    <TableCell className="py-2 text-center">
+                                    <TableCell className="py-2 text-center dark:text-gray-300">
                                       {item.keterangan}
                                     </TableCell>
-                                    <TableCell className="py-2 text-right">
+                                    <TableCell className="py-2 text-right dark:text-gray-300">
                                       {formatRupiah(item.rupiah)}
                                     </TableCell>
-                                    <TableCell className="py-2 text-right">
+                                    <TableCell className="py-2 text-right dark:text-gray-300">
                                       {item.tgl_transaksi}
                                     </TableCell>
                                   </TableRow>
@@ -1864,12 +1907,12 @@ const RekapDashboard = ({
                               // Subtotal row
                               <TableRow
                                 key={`subtotal-${groupIndex}`}
-                                className="bg-blue-50 font-medium"
+                                className="bg-blue-50 dark:bg-blue-900/20 font-medium"
                               >
-                                <TableCell colSpan={3} className="text-right">
+                                <TableCell colSpan={3} className="text-right dark:text-gray-300">
                                   Subtotal {keterangan}
                                 </TableCell>
-                                <TableCell className="text-right">
+                                <TableCell className="text-right dark:text-gray-300">
                                   {formatRupiah(subtotal)}
                                 </TableCell>
                                 <TableCell></TableCell>
@@ -1881,12 +1924,12 @@ const RekapDashboard = ({
                     </TableBody>
                     {/* Grand total row */}
                     {selectedRow.gapDetails.length > 0 && (
-                      <TableFooter className="bg-gray-100 sticky bottom-0">
+                      <TableFooter className="bg-gray-100 dark:bg-zinc-800 sticky bottom-0 border-t dark:border-zinc-700">
                         <TableRow className="font-bold">
-                          <TableCell colSpan={3} className="text-right">
+                          <TableCell colSpan={3} className="text-right dark:text-white">
                             Grand Total
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right dark:text-white">
                             {formatRupiah(
                               selectedRow.gapDetails.reduce(
                                 (sum, item) => sum + item.rupiah,
@@ -1902,13 +1945,13 @@ const RekapDashboard = ({
                 )
               ) : selectedRow.loketKantor === "SUB TOTAL" ? (
                 <Table className="min-w-full">
-                  <TableHeader className="bg-gray-100 sticky top-0">
+                  <TableHeader className="bg-gray-100 dark:bg-zinc-800 sticky top-0">
                     <TableRow>
-                      <TableHead className="min-w-[200px]">Loket</TableHead>
-                      <TableHead className="text-center">
+                      <TableHead className="min-w-[200px] dark:text-gray-200">Loket</TableHead>
+                      <TableHead className="text-center dark:text-gray-200">
                         Jumlah Nopol
                       </TableHead>
-                      <TableHead className="text-right">Total Nilai</TableHead>
+                      <TableHead className="text-right dark:text-gray-200">Total Nilai</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1926,14 +1969,14 @@ const RekapDashboard = ({
 
                       return Object.entries(groupedByLoket).map(
                         ([loket, { count, total }], index) => (
-                          <TableRow key={index}>
-                            <TableCell className="font-semibold">
+                          <TableRow key={index} className="border-b dark:border-zinc-800">
+                            <TableCell className="font-semibold dark:text-gray-300">
                               {loket}
                             </TableCell>
-                            <TableCell className="text-center">
+                            <TableCell className="text-center dark:text-gray-300">
                               {count} Nopol
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="text-right dark:text-gray-300">
                               {formatRupiah(total)}
                             </TableCell>
                           </TableRow>
@@ -1944,33 +1987,33 @@ const RekapDashboard = ({
                 </Table>
               ) : (
                 <Table className="min-w-full">
-                  <TableHeader className="bg-gray-100 sticky top-0">
+                  <TableHeader className="bg-gray-100 dark:bg-zinc-800 sticky top-0">
                     <TableRow>
-                      <TableHead className="w-[60px] text-center">No</TableHead>
-                      <TableHead className="min-w-[120px] text-center">
+                      <TableHead className="w-[60px] text-center dark:text-gray-200">No</TableHead>
+                      <TableHead className="min-w-[120px] text-center dark:text-gray-200">
                         No. Polisi
                       </TableHead>
-                      <TableHead className="min-w-[120px] text-right">
+                      <TableHead className="min-w-[120px] text-right dark:text-gray-200">
                         Tanggal
                       </TableHead>
-                      <TableHead className="min-w-[120px] text-right">
+                      <TableHead className="min-w-[120px] text-right dark:text-gray-200">
                         Nilai
                       </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {selectedRow.memastikanDetails.map((item, index) => (
-                      <TableRow key={index}>
-                        <TableCell className="py-2 font-medium text-center">
+                      <TableRow key={index} className="border-b dark:border-zinc-800">
+                        <TableCell className="py-2 font-medium text-center dark:text-gray-300">
                           {index + 1}
                         </TableCell>
-                        <TableCell className="py-2 font-mono text-center">
+                        <TableCell className="py-2 font-mono text-center dark:text-gray-300">
                           {item.nopol}
                         </TableCell>
-                        <TableCell className="py-2 text-right">
+                        <TableCell className="py-2 text-right dark:text-gray-300">
                           {item.tgl_transaksi}
                         </TableCell>
-                        <TableCell className="py-2 text-right">
+                        <TableCell className="py-2 text-right dark:text-gray-300">
                           {formatRupiah(item.rupiah)}
                         </TableCell>
                       </TableRow>
@@ -1981,7 +2024,7 @@ const RekapDashboard = ({
             </div>
 
             {/* Footer */}
-            <div className="flex justify-end p-4 border-t bg-gray-50">
+            <div className="flex justify-end p-4 border-t dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900/50">
               <Button
                 onClick={() => setSelectedRow(null)}
                 variant="outline"

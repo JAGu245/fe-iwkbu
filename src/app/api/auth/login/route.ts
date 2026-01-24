@@ -5,57 +5,72 @@ import { serialize } from "cookie";
 import { compare } from "bcryptjs";
 import { NextResponse } from "next/server";
 
-const SECRET_KEY = process.env.JWT_SECRET || "default-secret";
-const BCRYPT_SALT_ROUNDS = 10;
 
 export async function POST(request: Request) {
   try {
-    const { username, password } = await request.json();
+    const body = await request.json();
 
-    const userResults: any = await query({
-      query: "SELECT id, username, password FROM users WHERE username = ?",
-      values: [username],
+    // Call the Go Backend
+    const backendRes = await fetch("http://localhost:8080/api/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
     });
 
-    if (userResults.length === 0) {
+    if (!backendRes.ok) {
+      const errorData = await backendRes.text();
       return NextResponse.json(
-        { message: "Username atau password salah." },
-        { status: 401 }
+        { message: errorData || "Login gagal di backend" },
+        { status: backendRes.status }
       );
     }
 
-    const user = userResults[0];
-    const passwordMatch = await compare(password, user.password);
-
-    if (!passwordMatch) {
-      return NextResponse.json(
-        { message: "Username atau password salah." },
-        { status: 401 }
-      );
-    }
-
-    const token = sign(
-      {
-        userId: user.id,
-        username: user.username,
-      },
-      SECRET_KEY,
-      { expiresIn: "1h" } // Token berlaku selama 1 jam
-    );
+    const { token, user } = await backendRes.json();
 
     const serializedCookie = serialize("sessionToken", token, {
-      httpOnly: true, // Mencegah akses dari JavaScript sisi klien
-      secure: process.env.NODE_ENV === "production", // Hanya kirim via HTTPS di produksi
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 60 * 60, // 1 jam dalam detik
+      maxAge: 60 * 60 * 24, // 1 day
       path: "/",
     });
 
-    return new Response(JSON.stringify({ message: "Login berhasil" }), {
+    const serializedUserCookie = serialize("userName", user.username, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 60 * 60 * 24, // 1 day
+      path: "/",
+    });
+
+    const serializedRoleCookie = serialize("userRole", user.role, {
+      httpOnly: false, // Accessible by client-side JS for sidebar logic
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 60 * 60 * 24, // 1 day
+      path: "/",
+    });
+
+    const serializedFullNameCookie = serialize("fullName", user.fullname || user.username, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 60 * 60 * 24, // 1 day
+      path: "/",
+    });
+
+    return NextResponse.json({ message: "Login berhasil", user }, {
       status: 200,
-      headers: { "Set-Cookie": serializedCookie },
+      headers: [
+        ["Set-Cookie", serializedCookie],
+        ["Set-Cookie", serializedUserCookie],
+        ["Set-Cookie", serializedRoleCookie],
+        ["Set-Cookie", serializedFullNameCookie],
+      ],
     });
   } catch (e: any) {
-    return NextResponse.json({ message: e.message }, { status: 500 });
+    return NextResponse.json({ message: "Kesalahan server frontend: " + e.message }, { status: 500 });
   }
 }

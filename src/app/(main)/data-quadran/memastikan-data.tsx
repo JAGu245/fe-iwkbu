@@ -28,6 +28,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import Cookies from "js-cookie";
 
 // --- INTERFACE (TETAP SAMA) ---
 export interface DateRangeProps {
@@ -516,33 +517,32 @@ const MemastikanData = ({
   };
 
   const fetchData = async () => {
-    // ... FUNGSI fetchData TETAP SAMA, TIDAK PERLU DIUBAH ...
     setLoading(true);
     setError(null);
 
+    const token = Cookies.get("sessionToken");
+    if (!token) {
+      setError("Sesi telah berakhir, silakan login kembali.");
+      setLoading(false);
+      return;
+    }
+
+    const endpoints = loketMapping.map((item) => item.endpoint.replace(`${BASE_URL}/`, ""));
+
     try {
-      const responses = await Promise.all(
-        loketMapping.map((item) =>
-          fetch(item.endpoint)
-            .then((response) => {
-              if (!response.ok)
-                throw new Error(`Gagal mengambil data dari ${item.endpoint}`);
-              return response.json();
-            })
-            .then((result) => ({
-              endpoint: item.endpoint,
-              data: result.data || [],
-            }))
-            .catch((err) => {
-              console.error(`Error fetching ${item.endpoint}:`, err);
-              return {
-                endpoint: item.endpoint,
-                data: [],
-                error: err.message,
-              };
-            })
-        )
-      );
+      const bulkRes = await fetch("/api/bulk-rekap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoints }),
+      });
+
+      if (!bulkRes.ok) throw new Error("Gagal mengunduh data massal");
+
+      const bulkData = await bulkRes.json();
+      const responses = bulkData.results.map((res: any) => ({
+        endpoint: `${BASE_URL}/${res.endpoint}`,
+        data: res.data || [],
+      }));
 
       setData(responses);
     } catch (err) {
@@ -579,7 +579,7 @@ const MemastikanData = ({
       return date >= startDate && date <= endDate;
     };
 
-    loketMapping.forEach((loket) => {
+    for (const loket of loketMapping) {
       const endpointData =
         data.find((d) => d.endpoint === loket.endpoint)?.data || [];
       const gapDetails: GapDetail[] = [];
@@ -722,8 +722,8 @@ const MemastikanData = ({
           groupSubTotal.mengupayakan =
             groupSubTotal.mengupayakanCount > 0
               ? Math.round(
-                  groupSubTotal.mengupayakan / groupSubTotal.mengupayakanCount
-                )
+                groupSubTotal.mengupayakan / groupSubTotal.mengupayakanCount
+              )
               : 0;
           result.push(groupSubTotal);
           groupSubTotal = null;
@@ -792,7 +792,7 @@ const MemastikanData = ({
         groupSubTotal.sisaNopol += rekap.sisaNopol;
         groupSubTotal.sisaRupiah += rekap.sisaRupiah;
       }
-    });
+    }
 
     if (groupSubTotal) {
       groupSubTotal.memastikanPersen =
@@ -802,8 +802,8 @@ const MemastikanData = ({
       groupSubTotal.mengupayakan =
         groupSubTotal.mengupayakanCount > 0
           ? Math.round(
-              groupSubTotal.mengupayakan / groupSubTotal.mengupayakanCount
-            )
+            groupSubTotal.mengupayakan / groupSubTotal.mengupayakanCount
+          )
           : 0;
       result.push(groupSubTotal);
     }
@@ -959,7 +959,7 @@ const MemastikanData = ({
 
   if (loading) {
     return (
-      <div className="p-4 text-center text-sm text-gray-500">
+      <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
         Memuat data...
       </div>
     );
@@ -974,7 +974,7 @@ const MemastikanData = ({
   return (
     <div className="space-y-8">
       {/* Filter Section */}
-      <div className="flex flex-col sm:flex-row sm:items-end gap-4 rounded-md border p-4 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-end gap-4 rounded-md border dark:border-zinc-800 p-4 shadow-sm bg-white dark:bg-zinc-900/50">
         {/* ... Isi Filter tetap sama ... */}
         <div className="w-full">
           <label className="text-sm font-medium mb-1 block">
@@ -1010,8 +1010,8 @@ const MemastikanData = ({
                 />
               </PopoverContent>
             </Popover>
-            <span className="hidden sm:inline mx-1 text-gray-500">s/d</span>
-            <span className="sm:hidden text-xs text-gray-500 text-center w-full">
+            <span className="hidden sm:inline mx-1 text-gray-500 dark:text-gray-400">s/d</span>
+            <span className="sm:hidden text-xs text-gray-500 dark:text-gray-400 text-center w-full">
               sampai dengan
             </span>
             <Popover>
@@ -1061,7 +1061,7 @@ const MemastikanData = ({
         {quadrantData && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Kolom Memastikan */}
-            <div className="border rounded-lg p-4 shadow-sm">
+            <div className="border dark:border-zinc-800 rounded-lg p-4 shadow-sm bg-white dark:bg-zinc-900/50">
               <h3 className="font-semibold text-center text-lg mb-4">
                 Memastikan
               </h3>
@@ -1071,25 +1071,25 @@ const MemastikanData = ({
                     key: "q1",
                     label: "QUADRAN I (76-100%)",
                     data: quadrantData.memastikan.q1,
-                    color: "bg-green-100 border-green-500",
+                    color: "bg-green-100 border-green-500 dark:bg-green-900/30 dark:border-green-400",
                   },
                   {
                     key: "q2",
                     label: "QUADRAN II (51-75%)",
                     data: quadrantData.memastikan.q2,
-                    color: "bg-yellow-100 border-yellow-500",
+                    color: "bg-yellow-100 border-yellow-500 dark:bg-yellow-900/30 dark:border-yellow-400",
                   },
                   {
                     key: "q3",
                     label: "QUADRAN III (26-50%)",
                     data: quadrantData.memastikan.q3,
-                    color: "bg-orange-100 border-orange-500",
+                    color: "bg-orange-100 border-orange-500 dark:bg-orange-900/30 dark:border-orange-400",
                   },
                   {
                     key: "q4",
                     label: "QUADRAN IV (0-25%)",
                     data: quadrantData.memastikan.q4,
-                    color: "bg-red-100 border-red-500",
+                    color: "bg-red-100 border-red-500 dark:bg-red-900/30 dark:border-red-400",
                   },
                 ].map((quad) => (
                   <div
@@ -1107,18 +1107,18 @@ const MemastikanData = ({
                           .map((item, index) => (
                             <div
                               key={index}
-                              className="bg-white/60 p-1.5 rounded-md flex justify-between"
+                              className="bg-white/60 dark:bg-zinc-800/80 p-1.5 rounded-md flex justify-between"
                             >
-                              <span>
+                              <span className="dark:text-white">
                                 {index + 1}. {item.loket}
                               </span>
-                              <span className="font-semibold">
+                              <span className="font-semibold dark:text-white">
                                 {item.value.toFixed(2)}%
                               </span>
                             </div>
                           ))
                       ) : (
-                        <p className="text-gray-500 text-center text-xs py-2">
+                        <p className="text-gray-500 dark:text-gray-400 text-center text-xs py-2">
                           - Tidak ada data -
                         </p>
                       )}
@@ -1129,7 +1129,7 @@ const MemastikanData = ({
             </div>
 
             {/* Kolom Mengupayakan */}
-            <div className="border rounded-lg p-4 shadow-sm">
+            <div className="border dark:border-zinc-800 rounded-lg p-4 shadow-sm bg-white dark:bg-zinc-900/50">
               <h3 className="font-semibold text-center text-lg mb-4">
                 Mengupayakan
               </h3>
@@ -1139,25 +1139,25 @@ const MemastikanData = ({
                     key: "q1",
                     label: "QUADRAN I (10+ bln)",
                     data: quadrantData.mengupayakan.q1,
-                    color: "bg-green-100 border-green-500",
+                    color: "bg-green-100 border-green-500 dark:bg-green-900/30 dark:border-green-400",
                   },
                   {
                     key: "q2",
                     label: "QUADRAN II (7-9 bln)",
                     data: quadrantData.mengupayakan.q2,
-                    color: "bg-yellow-100 border-yellow-500",
+                    color: "bg-yellow-100 border-yellow-500 dark:bg-yellow-900/30 dark:border-yellow-400",
                   },
                   {
                     key: "q3",
                     label: "QUADRAN III (4-6 bln)",
                     data: quadrantData.mengupayakan.q3,
-                    color: "bg-orange-100 border-orange-500",
+                    color: "bg-orange-100 border-orange-500 dark:bg-orange-900/30 dark:border-orange-400",
                   },
                   {
                     key: "q4",
                     label: "QUADRAN IV (0-3 bln)",
                     data: quadrantData.mengupayakan.q4,
-                    color: "bg-red-100 border-red-500",
+                    color: "bg-red-100 border-red-500 dark:bg-red-900/30 dark:border-red-400",
                   },
                 ].map((quad) => (
                   <div
@@ -1175,18 +1175,18 @@ const MemastikanData = ({
                           .map((item, index) => (
                             <div
                               key={index}
-                              className="bg-white/60 p-1.5 rounded-md flex justify-between"
+                              className="bg-white/60 dark:bg-zinc-800/80 p-1.5 rounded-md flex justify-between"
                             >
-                              <span>
+                              <span className="dark:text-white">
                                 {index + 1}. {item.loket}
                               </span>
-                              <span className="font-semibold">
+                              <span className="font-semibold dark:text-white">
                                 {item.value} bln
                               </span>
                             </div>
                           ))
                       ) : (
-                        <p className="text-gray-500 text-center text-xs py-2">
+                        <p className="text-gray-500 dark:text-gray-400 text-center text-xs py-2">
                           - Tidak ada data -
                         </p>
                       )}
@@ -1197,7 +1197,7 @@ const MemastikanData = ({
             </div>
 
             {/* Kolom Menambahkan */}
-            <div className="border rounded-lg p-4 shadow-sm">
+            <div className="border dark:border-zinc-800 rounded-lg p-4 shadow-sm bg-white dark:bg-zinc-900/50">
               <h3 className="font-semibold text-center text-lg mb-4">
                 Menambahkan
               </h3>
@@ -1207,25 +1207,25 @@ const MemastikanData = ({
                     key: "q1",
                     label: "QUADRAN I (15+ Nopol)",
                     data: quadrantData.menambahkan.q1,
-                    color: "bg-green-100 border-green-500",
+                    color: "bg-green-100 border-green-500 dark:bg-green-900/30 dark:border-green-400",
                   },
                   {
                     key: "q2",
                     label: "QUADRAN II (11-14 Nopol)",
                     data: quadrantData.menambahkan.q2,
-                    color: "bg-yellow-100 border-yellow-500",
+                    color: "bg-yellow-100 border-yellow-500 dark:bg-yellow-900/30 dark:border-yellow-400",
                   },
                   {
                     key: "q3",
                     label: "QUADRAN III (6-10 Nopol)",
                     data: quadrantData.menambahkan.q3,
-                    color: "bg-orange-100 border-orange-500",
+                    color: "bg-orange-100 border-orange-500 dark:bg-orange-900/30 dark:border-orange-400",
                   },
                   {
                     key: "q4",
                     label: "QUADRAN IV (0-5 Nopol)",
                     data: quadrantData.menambahkan.q4,
-                    color: "bg-red-100 border-red-500",
+                    color: "bg-red-100 border-red-500 dark:bg-red-900/30 dark:border-red-400",
                   },
                 ].map((quad) => (
                   <div
@@ -1243,18 +1243,18 @@ const MemastikanData = ({
                           .map((item, index) => (
                             <div
                               key={index}
-                              className="bg-white/60 p-1.5 rounded-md flex justify-between"
+                              className="bg-white/60 dark:bg-zinc-800/80 p-1.5 rounded-md flex justify-between"
                             >
-                              <span>
+                              <span className="dark:text-white">
                                 {index + 1}. {item.loket}
                               </span>
-                              <span className="font-semibold">
+                              <span className="font-semibold dark:text-white">
                                 {item.value} nopol
                               </span>
                             </div>
                           ))
                       ) : (
-                        <p className="text-gray-500 text-center text-xs py-2">
+                        <p className="text-gray-500 dark:text-gray-400 text-center text-xs py-2">
                           - Tidak ada data -
                         </p>
                       )}
@@ -1273,9 +1273,9 @@ const MemastikanData = ({
         <h2 className="text-2xl font-bold tracking-tight text-center mb-6">
           Tabel Peringkat Kinerja Cabang
         </h2>
-        <div className="border rounded-lg shadow-sm">
+        <div className="border dark:border-zinc-800 rounded-lg shadow-sm overflow-hidden">
           <Table>
-            <TableHeader className="bg-gray-50">
+            <TableHeader className="bg-gray-50 dark:bg-zinc-950">
               <TableRow>
                 <TableHead className="w-[50px] text-center">No</TableHead>
                 <TableHead className="min-w-[200px]">Kantor Cabang</TableHead>
@@ -1314,7 +1314,7 @@ const MemastikanData = ({
                 .map((row, index) => (
                   <TableRow
                     key={index}
-                    className="font-medium hover:bg-gray-50"
+                    className="font-medium hover:bg-gray-50 dark:hover:bg-zinc-800"
                   >
                     <TableCell className="text-center text-lg font-bold text-gray-400">
                       {index + 1}

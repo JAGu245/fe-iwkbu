@@ -1,0 +1,42 @@
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+
+export async function GET(
+    request: Request,
+    { params }: { params: Promise<{ slug: string }> }
+) {
+    try {
+        const { slug } = await params;
+        const cookieStore = await cookies();
+        const token = cookieStore.get("sessionToken")?.value;
+
+        if (!token) {
+            return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+        }
+
+        // Forward the request to the Go backend on localhost:8080
+        // The frontend server can resolve localhost:8080 even if the user's device cannot.
+        const backendRes = await fetch(`http://localhost:8080/${slug}`, {
+            method: "GET",
+            headers: {
+                "Authorization": `Bearer ${token}`
+            }
+        });
+
+        if (!backendRes.ok) {
+            const errorData = await backendRes.text();
+            return NextResponse.json(
+                { message: errorData || "Gagal mengambil data rekap" },
+                { status: backendRes.status }
+            );
+        }
+
+        const result = await backendRes.json();
+        return NextResponse.json(result);
+    } catch (error: any) {
+        return NextResponse.json(
+            { message: "Kesalahan server proxy: " + error.message },
+            { status: 500 }
+        );
+    }
+}

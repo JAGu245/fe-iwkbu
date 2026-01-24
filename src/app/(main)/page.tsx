@@ -50,7 +50,7 @@ const Homepage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white dark:bg-zinc-950">
       {/* Header */}
       <div className="bg-gray-900 text-white py-4 px-4 md:px-8">
         <h1 className="text-xl md:text-3xl font-bold text-center uppercase leading-tight">
@@ -62,16 +62,16 @@ const Homepage = () => {
       </div>
 
       {/* Sub Header */}
-      <div className="bg-white py-4 px-4 md:px-8 border-b border-gray-200">
-        <h2 className="text-base md:text-lg font-bold text-black text-center uppercase tracking-wide">
+      <div className="bg-white dark:bg-zinc-900 py-4 px-4 md:px-8 border-b border-gray-200 dark:border-zinc-800">
+        <h2 className="text-base md:text-lg font-bold text-black dark:text-white text-center uppercase tracking-wide">
           Checkin Checkout Penerimaan IWKBU Periode{" "}
           {dateRange.start && dateRange.end
             ? `${formatDisplayDate(dateRange.start)} s.d. ${formatDisplayDate(
-                dateRange.end
-              )}`
+              dateRange.end
+            )}`
             : `${formatDisplayDate(
-                getDefaultDateRange().start
-              )} s.d. ${formatDisplayDate(getDefaultDateRange().end)}`}
+              getDefaultDateRange().start
+            )} s.d. ${formatDisplayDate(getDefaultDateRange().end)}`}
         </h2>
       </div>
 
