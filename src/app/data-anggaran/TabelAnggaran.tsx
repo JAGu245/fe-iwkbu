@@ -1,10 +1,10 @@
 "use client";
 
-import Cookies from "js-cookie";
 import { useEffect, useState } from "react";
 import {
   Table,
   TableBody,
+  TableFooter,
   TableCell,
   TableHead,
   TableHeader,
@@ -57,8 +57,8 @@ interface AnggaranRow {
   namaLoket: string;
   anggaranSatuTahun: number;
   targetAnggaranBulan: number;
-  penerimaanTL: number;
-  penerimaanTI: number;
+  penerimaan2024: number;
+  penerimaan2025: number;
   realisasi: string;
   gapRealisasiPersen: string;
   gapRealisasiRupiah: number;
@@ -487,12 +487,12 @@ const calculateGapRealisasiPersen = (
   return `${(((penerimaan - target) / target) * 100).toFixed(2)}%`;
 };
 const calculateGrowthPersen = (
-  penerimaanTI: number,
-  penerimaanTL: number
+  penerimaan2025: number,
+  penerimaan2024: number
 ): string => {
-  if (penerimaanTL === 0) return penerimaanTI > 0 ? "∞" : "0.00%";
+  if (penerimaan2024 === 0) return penerimaan2025 > 0 ? "∞" : "0.00%";
   return `${(
-    ((penerimaanTI - penerimaanTL) / penerimaanTL) *
+    ((penerimaan2025 - penerimaan2024) / penerimaan2024) *
     100
   ).toFixed(2)}%`;
 };
@@ -514,18 +514,18 @@ const PerformanceCell = ({
   const isNeutral = !isPositive && !isNegative;
 
   const colorClass = cn({
-    "text-green-600 dark:text-green-400": isPositive,
-    "text-red-600 dark:text-red-400": isNegative,
-    "text-gray-700 dark:text-gray-300": isNeutral,
+    "text-green-600": isPositive,
+    "text-red-600": isNegative,
+    "text-white": isNeutral,
   });
   const Icon = isPositive ? ArrowUp : isNegative ? ArrowDown : Minus;
 
   const formattedValue = isPercentage
     ? `${numericValue.toFixed(2)}%`
     : new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-    }).format(numericValue);
+        style: "currency",
+        currency: "IDR",
+      }).format(numericValue);
 
   return (
     <div
@@ -605,36 +605,46 @@ const TabelAnggaran = ({
     setError(null);
     setData([]);
 
-    const token = Cookies.get("sessionToken");
-    if (!token) {
-      setError("Sesi telah berakhir, silakan login kembali.");
-      setLoading(null);
-      return;
-    }
-
-    const endpoints = loketMapping.map((item) => item.endpoint.replace(`${BASE_URL}/`, ""));
-
+    const batchSize = 10;
+    let allResponses: { endpoint: string; data: ReportData[] }[] = [];
     try {
-      setLoading({ message: "Mengunduh data secara massal...", progress: 30 });
+      for (let i = 0; i < loketMapping.length; i += batchSize) {
+        const batch = loketMapping.slice(i, i + batchSize);
+        const progress = Math.round((i / loketMapping.length) * 100);
 
-      const bulkRes = await fetch("/api/bulk-rekap", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ endpoints }),
-      });
+        // update pesan loading untuk setiap batch
+        setLoading({
+          message: `Memuat data loket ${i + 1} dari ${loketMapping.length}...`,
+          progress: progress,
+        });
 
-      if (!bulkRes.ok) {
-        throw new Error("Gagal mengunduh data secara massal");
+        const batchResponses = await Promise.all(
+          batch.map((item) =>
+            fetch(item.endpoint)
+              .then((res) => {
+                if (!res.ok)
+                  throw new Error(`Gagal mengambil data dari ${item.endpoint}`);
+                return res.json();
+              })
+              .then((result) => ({
+                endpoint: item.endpoint,
+                data: result.data || [],
+              }))
+              .catch((err) => {
+                console.error(`Error fetching ${item.endpoint}:`, err);
+                return {
+                  endpoint: item.endpoint,
+                  data: [],
+                  error: err.message,
+                };
+              })
+          )
+        );
+        // Gabungkan hasil batch ke data utama dan perbarui UI
+        allResponses = [...allResponses, ...batchResponses];
+        setData(allResponses);
       }
-
-      const bulkData = await bulkRes.json();
-      const allResponses = bulkData.results.map((res: any) => ({
-        endpoint: `${BASE_URL}/${res.endpoint}`,
-        data: res.data || [],
-      }));
-
-      setData(allResponses);
-      setLoading({ message: "Menyelesaikan data...", progress: 100 });
+      setLoading({ message: "Menyelesaikan...", progress: 100 });
       setTimeout(() => setLoading(null), 500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Terjadi Kesalahan");
@@ -652,43 +662,20 @@ const TabelAnggaran = ({
       1;
     const numberOfMonths = monthDiff;
 
-    // Helper to parse DD/MM/YYYY to timestamp
-    const parseToTimestamp = (dateStr: string): number | null => {
-      if (!dateStr) return null;
+    const isDateInRange = (
+      dateStr: string | null,
+      start: Date | null,
+      end: Date | null
+    ) => {
+      if (!start || !end || !dateStr) return false;
       const parts = dateStr.split("/");
-      if (parts.length < 3) return null;
-      // Note: Months are 0-indexed in JS Date
-      return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])).getTime();
+      if (parts.length < 2) return false;
+      const date = new Date(2000, parseInt(parts[1]) - 1, parseInt(parts[0]));
+      return (
+        date >= new Date(2000, start.getMonth(), start.getDate()) &&
+        date <= new Date(2000, end.getMonth(), end.getDate())
+      );
     };
-
-    // Helper for O(1) range check
-    const isDateInRangeOptimized = (
-      timestamp: number | null,
-      startLimit: number,
-      endLimit: number
-    ): boolean => {
-      if (timestamp === null) return false;
-      return timestamp >= startLimit && timestamp <= endLimit;
-    };
-
-    // Define Date Ranges for TL (Previous Year) and TI (Current Year)
-    const selectedYear = startDate.getFullYear();
-
-    // TL uses Year - 1
-    const tlStartDate = new Date(startDate);
-    tlStartDate.setFullYear(selectedYear - 1);
-    const tlEndDate = new Date(endDate);
-    tlEndDate.setFullYear(selectedYear - 1);
-
-    // TI uses Selected Year
-    const tiStartDate = startDate;
-    const tiEndDate = endDate;
-
-    // Convert boundaries to timestamps for O(1) comparison
-    const tlStartLimit = new Date(tlStartDate.getFullYear(), tlStartDate.getMonth(), tlStartDate.getDate()).getTime();
-    const tlEndLimit = new Date(tlEndDate.getFullYear(), tlEndDate.getMonth(), tlEndDate.getDate()).getTime();
-    const tiStartLimit = new Date(tiStartDate.getFullYear(), tiStartDate.getMonth(), tiStartDate.getDate()).getTime();
-    const tiEndLimit = new Date(tiEndDate.getFullYear(), tiEndDate.getMonth(), tiEndDate.getDate()).getTime();
 
     type GroupData = { children: AnggaranRow[] } & Omit<
       AnggaranRow,
@@ -710,8 +697,8 @@ const TabelAnggaran = ({
             children: [],
             anggaranSatuTahun: 0,
             targetAnggaranBulan: 0,
-            penerimaanTL: 0,
-            penerimaanTI: 0,
+            penerimaan2024: 0,
+            penerimaan2025: 0,
             gapRealisasiRupiah: 0,
             growthRupiah: 0,
           };
@@ -720,26 +707,22 @@ const TabelAnggaran = ({
 
       const endpointData =
         data.find((d) => d.endpoint === loket.endpoint)?.data || [];
+      const filteredData = endpointData.filter((item) =>
+        isDateInRange(
+          item.iwkbu_tl_tgl_transaksi || item.iwkbu_ti_tgl_transaksi,
+          startDate,
+          endDate
+        )
+      );
 
-      // Separate TL and TI data with proper year filtering
-      const penerimaanTL = endpointData.reduce((sum, item) => {
-        if (!item.iwkbu_tl_tgl_transaksi) return sum;
-        const ts = parseToTimestamp(item.iwkbu_tl_tgl_transaksi);
-        if (isDateInRangeOptimized(ts, tlStartLimit, tlEndLimit)) {
-          return sum + (item.iwkbu_tl_rupiah_penerimaan || 0);
-        }
-        return sum;
-      }, 0);
-
-      const penerimaanTI = endpointData.reduce((sum, item) => {
-        if (!item.iwkbu_ti_tgl_transaksi) return sum;
-        const ts = parseToTimestamp(item.iwkbu_ti_tgl_transaksi);
-        if (isDateInRangeOptimized(ts, tiStartLimit, tiEndLimit)) {
-          return sum + (item.iwkbu_ti_rupiah_penerimaan || 0);
-        }
-        return sum;
-      }, 0);
-
+      const penerimaan2024 = filteredData.reduce(
+        (sum, item) => sum + (item.iwkbu_tl_rupiah_penerimaan || 0),
+        0
+      );
+      const penerimaan2025 = filteredData.reduce(
+        (sum, item) => sum + (item.iwkbu_ti_rupiah_penerimaan || 0),
+        0
+      );
       const targetAnggaranBulanBerjalan =
         (loket.anggaranSatuTahun / 12) * numberOfMonths;
 
@@ -749,16 +732,16 @@ const TabelAnggaran = ({
         rowType: "detail",
         anggaranSatuTahun: loket.anggaranSatuTahun,
         targetAnggaranBulan: targetAnggaranBulanBerjalan,
-        penerimaanTL,
-        penerimaanTI,
-        realisasi: calculateRealisasi(penerimaanTI, loket.anggaranSatuTahun),
-        gapRealisasiRupiah: penerimaanTI - targetAnggaranBulanBerjalan,
+        penerimaan2024,
+        penerimaan2025,
+        realisasi: calculateRealisasi(penerimaan2025, loket.anggaranSatuTahun),
+        gapRealisasiRupiah: penerimaan2025 - targetAnggaranBulanBerjalan,
         gapRealisasiPersen: calculateGapRealisasiPersen(
-          penerimaanTI,
+          penerimaan2025,
           targetAnggaranBulanBerjalan
         ),
-        growthRupiah: penerimaanTI - penerimaanTL,
-        growthPersen: calculateGrowthPersen(penerimaanTI, penerimaanTL),
+        growthRupiah: penerimaan2025 - penerimaan2024,
+        growthPersen: calculateGrowthPersen(penerimaan2025, penerimaan2024),
       };
 
       if (groupedData[currentGroupName]) {
@@ -776,21 +759,21 @@ const TabelAnggaran = ({
       const subTotalData = {
         anggaranSatuTahun: group.anggaranSatuTahun,
         targetAnggaranBulan: group.targetAnggaranBulan,
-        penerimaanTL: group.penerimaanTL,
-        penerimaanTI: group.penerimaanTI,
+        penerimaan2024: group.penerimaan2024,
+        penerimaan2025: group.penerimaan2025,
         gapRealisasiRupiah: group.gapRealisasiRupiah,
         growthRupiah: group.growthRupiah,
         realisasi: calculateRealisasi(
-          group.penerimaanTI,
+          group.penerimaan2025,
           group.anggaranSatuTahun
         ),
         gapRealisasiPersen: calculateGapRealisasiPersen(
-          group.penerimaanTI,
+          group.penerimaan2025,
           group.targetAnggaranBulan
         ),
         growthPersen: calculateGrowthPersen(
-          group.penerimaanTI,
-          group.penerimaanTL
+          group.penerimaan2025,
+          group.penerimaan2024
         ),
       };
 
@@ -821,8 +804,8 @@ const TabelAnggaran = ({
         {
           anggaranSatuTahun: 0,
           targetAnggaranBulan: 0,
-          penerimaanTL: 0,
-          penerimaanTI: 0,
+          penerimaan2024: 0,
+          penerimaan2025: 0,
           gapRealisasiRupiah: 0,
           growthRupiah: 0,
         }
@@ -835,16 +818,16 @@ const TabelAnggaran = ({
         rowType: "grandtotal",
         ...grandTotalData,
         realisasi: calculateRealisasi(
-          grandTotalData.penerimaanTI,
+          grandTotalData.penerimaan2025,
           grandTotalData.anggaranSatuTahun
         ),
         gapRealisasiPersen: calculateGapRealisasiPersen(
-          grandTotalData.penerimaanTI,
+          grandTotalData.penerimaan2025,
           grandTotalData.targetAnggaranBulan
         ),
         growthPersen: calculateGrowthPersen(
-          grandTotalData.penerimaanTI,
-          grandTotalData.penerimaanTL
+          grandTotalData.penerimaan2025,
+          grandTotalData.penerimaan2024
         ),
       });
     }
@@ -910,9 +893,9 @@ const TabelAnggaran = ({
   return (
     <div className="space-y-4">
       <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-end gap-4 rounded-md border p-4 shadow-sm bg-white dark:bg-zinc-900">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-4 rounded-md border p-4 shadow-sm bg-white">
           <div className="w-full">
-            <label className="text-sm font-medium mb-2 block text-gray-700 dark:text-gray-200">
+            <label className="text-sm font-medium mb-2 block text-gray-700">
               Filter Periode Laporan
             </label>
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full">
@@ -982,49 +965,49 @@ const TabelAnggaran = ({
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border shadow-md bg-white dark:bg-zinc-900">
+      <div className="overflow-x-auto rounded-lg border shadow-md bg-white">
         <Table className="min-w-full">
-          <TableHeader className="bg-slate-100 dark:bg-zinc-900 sticky top-0 z-20">
+          <TableHeader className="bg-slate-100 sticky top-0 z-20">
             <TableRow>
               <TableHead
                 rowSpan={2}
-                className="text-slate-800 dark:text-gray-200 w-[50px] text-center align-middle font-semibold whitespace-nowrap px-4"
+                className="text-slate-800 w-[50px] text-center align-middle font-semibold whitespace-nowrap px-4"
               >
                 NO
               </TableHead>
               <TableHead
                 rowSpan={2}
-                className="text-slate-800 dark:text-gray-200 min-w-[250px] align-middle font-semibold sticky left-0 bg-slate-100 dark:bg-zinc-900 z-30"
+                className="text-slate-800 min-w-[250px] align-middle font-semibold sticky left-0 bg-slate-100 z-30"
               >
                 NAMA LOKET
               </TableHead>
               <TableHead
                 rowSpan={2}
-                className="text-slate-800 dark:text-gray-200 min-w-[180px] align-middle text-center font-semibold whitespace-nowrap"
+                className="text-slate-800 min-w-[180px] align-middle text-center font-semibold whitespace-nowrap"
               >
                 ANGGARAN 1 TAHUN
               </TableHead>
               <TableHead
                 rowSpan={2}
-                className="text-slate-800 dark:text-gray-200 min-w-[180px] align-middle text-center font-semibold whitespace-nowrap"
+                className="text-slate-800 min-w-[180px] align-middle text-center font-semibold whitespace-nowrap"
               >
                 TARGET ANGGARAN S/D SAAT INI
               </TableHead>
               <TableHead
                 colSpan={2}
-                className="text-slate-800 dark:text-gray-200 text-center border-b border-slate-100 dark:border-zinc-700 font-semibold"
+                className="text-slate-800 text-center border-b border-slate-100 font-semibold"
               >
                 PENERIMAAN
               </TableHead>
               <TableHead
                 rowSpan={2}
-                className="text-slate-800 dark:text-gray-200 text-center align-middle font-semibold"
+                className="text-slate-800 text-center align-middle font-semibold"
               >
                 REALISASI
               </TableHead>
               <TableHead
                 colSpan={2}
-                className="text-slate-800 dark:text-gray-200 text-center border-b border-slate-100 dark:border-zinc-700 font-semibold"
+                className="text-slate-800 text-center border-b border-slate-100 font-semibold"
               >
                 GAP REALISASI
               </TableHead>
@@ -1035,14 +1018,14 @@ const TabelAnggaran = ({
                 GROWTH
               </TableHead>
             </TableRow>
-            <TableRow className="bg-slate-100 dark:bg-zinc-900">
-              <TableHead className="text-slate-600 dark:text-gray-300 text-center font-medium whitespace-nowrap">
-                {startDate ? startDate.getFullYear() - 1 : "TL"}
+            <TableRow className="bg-slate-100">
+              <TableHead className="text-slate-600 text-center font-medium whitespace-nowrap">
+                2024
               </TableHead>
-              <TableHead className="text-slate-600 dark:text-gray-300 text-center font-medium whitespace-nowrap">
-                {startDate ? startDate.getFullYear() : "TI"}
+              <TableHead className="text-slate-600 text-center font-medium whitespace-nowrap">
+                2025
               </TableHead>
-              <TableHead className="text-slate-600 dark:text-white text-center font-medium whitespace-nowrap">
+              <TableHead className="text-slate-600 text-center font-medium whitespace-nowrap">
                 %
               </TableHead>
               <TableHead className="text-slate-600 text-center font-medium whitespace-nowrap">
@@ -1065,11 +1048,11 @@ const TabelAnggaran = ({
                   return (
                     <TableRow
                       key={index}
-                      className="bg-gray-200 dark:bg-zinc-700 hover:bg-gray-300 dark:hover:bg-zinc-600 cursor-pointer"
+                      className="bg-gray-200  hover:bg-gray-300 cursor-pointer "
                       onClick={() => toggleGroup(row.namaLoket)}
                     >
                       <TableCell
-                        className="text-gray-900 dark:text-gray-200 text-sm tracking-wider py-3 px-4 sticky left-0 bg-gray-200 dark:bg-zinc-700 z-10"
+                        className="text-gray-900 text-sm tracking-wider py-3 px-4 sticky left-0 bg-gray-200 z-10"
                         colSpan={2}
                       >
                         <div className="flex items-center gap-2">
@@ -1081,19 +1064,19 @@ const TabelAnggaran = ({
                           {row.namaLoket}
                         </div>
                       </TableCell>
-                      <TableCell className="text-right text-gray-900 dark:text-gray-200 font-semibold">
+                      <TableCell className="text-right text-gray-900 font-semibold">
                         {formatRupiah(row.anggaranSatuTahun)}
                       </TableCell>
-                      <TableCell className="text-right text-gray-900 dark:text-gray-200 font-semibold">
+                      <TableCell className="text-right text-gray-900 font-semibold">
                         {formatRupiah(row.targetAnggaranBulan)}
                       </TableCell>
-                      <TableCell className="text-right text-gray-900 dark:text-gray-200 font-semibold">
-                        {formatRupiah(row.penerimaanTL)}
+                      <TableCell className="text-right text-gray-900 font-semibold">
+                        {formatRupiah(row.penerimaan2024)}
                       </TableCell>
-                      <TableCell className="text-right text-gray-900 dark:text-gray-200 font-semibold">
-                        {formatRupiah(row.penerimaanTI)}
+                      <TableCell className="text-right text-gray-900 font-semibold">
+                        {formatRupiah(row.penerimaan2025)}
                       </TableCell>
-                      <TableCell className="text-center text-gray-900 dark:text-gray-200 font-semibold">
+                      <TableCell className="text-center text-gray-900 font-semibold">
                         {row.realisasi}
                       </TableCell>
                       <TableCell>
@@ -1137,10 +1120,10 @@ const TabelAnggaran = ({
                         {formatRupiah(row.targetAnggaranBulan)}
                       </TableCell>
                       <TableCell className="text-right text-base">
-                        {formatRupiah(row.penerimaanTL)}
+                        {formatRupiah(row.penerimaan2024)}
                       </TableCell>
                       <TableCell className="text-right text-base">
-                        {formatRupiah(row.penerimaanTI)}
+                        {formatRupiah(row.penerimaan2025)}
                       </TableCell>
                       <TableCell className="text-center text-base">
                         {row.realisasi}
@@ -1189,10 +1172,10 @@ const TabelAnggaran = ({
                         {formatRupiah(row.targetAnggaranBulan)}
                       </TableCell>
                       <TableCell className="text-right text-white">
-                        {formatRupiah(row.penerimaanTL)}
+                        {formatRupiah(row.penerimaan2024)}
                       </TableCell>
                       <TableCell className="text-right text-white">
-                        {formatRupiah(row.penerimaanTI)}
+                        {formatRupiah(row.penerimaan2025)}
                       </TableCell>
                       <TableCell className="text-center text-white">
                         {row.realisasi}
@@ -1222,27 +1205,27 @@ const TabelAnggaran = ({
                 return (
                   <TableRow
                     key={index}
-                    className="hover:bg-gray-50 dark:hover:bg-zinc-700 even:bg-white dark:even:bg-zinc-900 odd:bg-slate-50/50 dark:odd:bg-zinc-800/50"
+                    className="hover:bg-gray-50 even:bg-white odd:bg-slate-50/50"
                   >
-                    <TableCell className="text-center text-gray-600 dark:text-gray-400">
+                    <TableCell className="text-center text-gray-600">
                       {row.no}
                     </TableCell>
-                    <TableCell className="font-medium text-gray-800 dark:text-gray-200 sticky left-0 bg-inherit z-10">
+                    <TableCell className="font-medium text-gray-800 sticky left-0 bg-inherit z-10">
                       {row.namaLoket}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-gray-700 dark:text-gray-300">
+                    <TableCell className="text-right font-mono text-gray-700">
                       {formatRupiah(row.anggaranSatuTahun)}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-gray-700 dark:text-gray-300">
+                    <TableCell className="text-right font-mono text-gray-700">
                       {formatRupiah(row.targetAnggaranBulan)}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-gray-700 dark:text-gray-300">
-                      {formatRupiah(row.penerimaanTL)}
+                    <TableCell className="text-right font-mono text-gray-700">
+                      {formatRupiah(row.penerimaan2024)}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-gray-700 dark:text-gray-300">
-                      {formatRupiah(row.penerimaanTI)}
+                    <TableCell className="text-right font-mono text-gray-700">
+                      {formatRupiah(row.penerimaan2025)}
                     </TableCell>
-                    <TableCell className="text-center font-semibold text-blue-600 dark:text-blue-400">
+                    <TableCell className="text-center font-semibold text-blue-600">
                       {row.realisasi}
                     </TableCell>
                     <TableCell>
