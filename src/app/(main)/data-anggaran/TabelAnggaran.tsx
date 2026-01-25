@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import {
   Table,
   TableBody,
+  TableFooter,
   TableCell,
   TableHead,
   TableHeader,
