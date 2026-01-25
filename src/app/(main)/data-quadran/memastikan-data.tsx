@@ -492,9 +492,12 @@ const MemastikanData = ({
   initialStartDate,
   initialEndDate,
 }: DateRangeProps) => {
+  const [data, setData] = useState<{ endpoint: string; data: ReportData[] }[]>(
+    []
+  );
   const [rekapData, setRekapData] = useState<RekapRow[]>([]);
-  const [loading, setLoading] = useState<{ message: string; progress: number } | null>(null);
   const [month, setMonth] = useState<number>(5);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
@@ -513,238 +516,300 @@ const MemastikanData = ({
     fetchData();
   };
 
-  // Helper functions for progressive processing
-  const parseToTimestamp = (dateStr: string): number | null => {
-    if (!dateStr) return null;
-    const parts = dateStr.split("/");
-    if (parts.length < 3) return null;
-    return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])).getTime();
-  };
-
-  const isDateInRangeOptimized = (timestamp: number | null, startLimit: number, endLimit: number): boolean => {
-    if (timestamp === null || timestamp === 0) return false;
-    return timestamp >= startLimit && timestamp <= endLimit;
-  };
-
-  const processIndividualRekap = (
-    loket: any,
-    endpointData: ReportData[],
-    useDateRange: boolean,
-    tlStartLimit: number,
-    tlEndLimit: number,
-    tiStartLimit: number,
-    tiEndLimit: number
-  ): RekapRow => {
-    const rekap: RekapRow = {
-      no: loket.no,
-      loketKantor: loket.childLoket,
-      petugas: loket.petugas,
-      checkinNopol: 0,
-      checkinRupiah: 0,
-      checkoutNopol: 0,
-      checkoutRupiah: 0,
-      memastikanNopol: 0,
-      memastikanRupiah: 0,
-      memastikanPersen: 0,
-      menambahkanNopol: 0,
-      menambahkanRupiah: 0,
-      mengupayakan: 0,
-      gapNopol: 0,
-      sisaNopol: 0,
-      sisaRupiah: 0,
-      gapDetails: [],
-      mengupayakanCount: 0,
-    };
-
-    let totalBulanMajuTI = 0;
-    let countNopolBulanMajuTI = 0;
-    let menambahkanNopol = 0;
-    let menambahkanRupiah = 0;
-    const sisaNopolSet = new Set<string>();
-    let sisaRupiah = 0;
-    const checkinNopolSet = new Set<string>();
-
-    endpointData.forEach((item) => {
-      if (item.iwkbu_tl_tgl_transaksi) {
-        const ts = parseToTimestamp(item.iwkbu_tl_tgl_transaksi);
-        if (isDateInRangeOptimized(ts, tlStartLimit, tlEndLimit)) {
-          rekap.checkinNopol += item.kode_nopol_co || 0;
-          rekap.checkinRupiah += item.iwkbu_tl_rupiah_penerimaan || 0;
-          if (item.iwkbu_tl_nopol) checkinNopolSet.add(item.iwkbu_tl_nopol);
-        }
-      }
-    });
-
-    const memastikanDetails: { nopol: string; rupiah: number }[] = [];
-
-    endpointData.forEach((item) => {
-      if (item.iwkbu_ti_tgl_transaksi) {
-        const ts = parseToTimestamp(item.iwkbu_ti_tgl_transaksi);
-        if (isDateInRangeOptimized(ts, tiStartLimit, tiEndLimit)) {
-          rekap.checkoutNopol += item.kode_nopol_ci || 0;
-          rekap.checkoutRupiah += item.iwkbu_ti_rupiah_penerimaan || 0;
-
-          const isMenambahkan = item.tl_keterangan_konversi_iwkbu === "Armada Baru" || item.tl_keterangan_konversi_iwkbu === "Mutasi Masuk";
-          const isMemastikan = item.iwkbu_ti_nopol && checkinNopolSet.has(item.iwkbu_ti_nopol);
-
-          if (isMenambahkan) {
-            menambahkanNopol += 1;
-            menambahkanRupiah += item.iwkbu_ti_rupiah_penerimaan || 0;
-          }
-
-          if (isMemastikan && item.iwkbu_ti_nopol) {
-            memastikanDetails.push({ nopol: item.iwkbu_ti_nopol, rupiah: item.iwkbu_ti_rupiah_penerimaan || 0 });
-          }
-
-          if (!isMemastikan && !isMenambahkan && item.iwkbu_ti_nopol) {
-            sisaNopolSet.add(item.iwkbu_ti_nopol);
-            sisaRupiah += item.iwkbu_ti_rupiah_penerimaan || 0;
-          }
-
-          if (item.iwkbu_ti_bulan_maju > 0) {
-            totalBulanMajuTI += item.iwkbu_ti_bulan_maju;
-            countNopolBulanMajuTI++;
-          }
-        }
-      }
-    });
-
-    rekap.memastikanNopol = memastikanDetails.length;
-    rekap.memastikanRupiah = memastikanDetails.reduce((sum, d) => sum + d.rupiah, 0);
-    rekap.memastikanPersen = rekap.checkinNopol > 0 ? rekap.memastikanNopol / rekap.checkinNopol : 0;
-    rekap.menambahkanNopol = menambahkanNopol;
-    rekap.menambahkanRupiah = menambahkanRupiah;
-    rekap.gapNopol = rekap.checkinNopol - rekap.memastikanNopol;
-    rekap.mengupayakan = countNopolBulanMajuTI > 0 ? Math.round(totalBulanMajuTI / rekap.checkoutNopol) : 0;
-    rekap.sisaNopol = sisaNopolSet.size;
-    rekap.sisaRupiah = sisaRupiah;
-    rekap.mengupayakanCount = countNopolBulanMajuTI;
-
-    return rekap;
-  };
-
   const fetchData = async () => {
-    if (!startDate || !endDate) return;
-    setLoading({ message: "Menghubungkan ke pusat data...", progress: 0 });
+    setLoading(true);
     setError(null);
-    setRekapData([]);
 
     const token = Cookies.get("sessionToken");
     if (!token) {
       setError("Sesi telah berakhir, silakan login kembali.");
-      setLoading(null);
+      setLoading(false);
       return;
     }
 
-    const tlStartLimit = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()).getTime();
-    const tlEndLimit = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate()).getTime();
-    const tiStartLimit = tlStartLimit;
-    const tiEndLimit = tlEndLimit;
-
-    let tempRows: RekapRow[] = [];
-    let currentSubTotal: RekapRow | null = null;
-    let currentGroupName = "";
+    const endpoints = loketMapping.map((item) => item.endpoint.replace(`${BASE_URL}/`, ""));
 
     try {
-      for (let i = 0; i < loketMapping.length; i++) {
-        const loket = loketMapping[i];
-        const progress = Math.round(((i + 1) / loketMapping.length) * 100);
-        setLoading({ message: `Menganalisis Quadran: ${loket.childLoket} (${i + 1}/${loketMapping.length})...`, progress });
+      const bulkRes = await fetch("/api/bulk-rekap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoints }),
+      });
 
-        const endpoint = loket.endpoint.replace(`${BASE_URL}/`, "");
-        const res = await fetch(`/api/rekap/${endpoint}`);
-        if (!res.ok) throw new Error(`Gagal ambil data ${loket.childLoket}`);
-        const result = await res.json();
-        const rawData = result.data || [];
+      if (!bulkRes.ok) throw new Error("Gagal mengunduh data massal");
 
-        const processedRow = processIndividualRekap(loket, rawData, true, tlStartLimit, tlEndLimit, tiStartLimit, tiEndLimit);
+      const bulkData = await bulkRes.json();
+      const responses = bulkData.results.map((res: any) => ({
+        endpoint: `${BASE_URL}/${res.endpoint}`,
+        data: res.data || [],
+      }));
 
-        if (loket.parentLoket) {
-          if (currentSubTotal) {
-            currentSubTotal.memastikanPersen = currentSubTotal.checkinNopol > 0 ? currentSubTotal.memastikanNopol / currentSubTotal.checkinNopol : 0;
-            currentSubTotal.mengupayakan = currentSubTotal.mengupayakanCount > 0 ? Math.round(currentSubTotal.mengupayakan / currentSubTotal.mengupayakanCount) : 0;
-            tempRows.push(currentSubTotal);
-          }
-          currentGroupName = loket.parentLoket;
-          tempRows.push({
-            no: 0,
-            loketKantor: currentGroupName,
-            petugas: "",
-            checkinNopol: 0,
-            checkinRupiah: 0,
-            checkoutNopol: 0,
-            checkoutRupiah: 0,
-            memastikanNopol: 0,
-            memastikanRupiah: 0,
-            memastikanPersen: 0,
-            menambahkanNopol: 0,
-            menambahkanRupiah: 0,
-            mengupayakan: 0,
-            gapNopol: 0,
-            sisaNopol: 0,
-            sisaRupiah: 0,
-            gapDetails: [],
-            mengupayakanCount: 0,
-          });
-          currentSubTotal = {
-            no: 0,
-            loketKantor: "SUB TOTAL",
-            petugas: "",
-            checkinNopol: 0,
-            checkinRupiah: 0,
-            checkoutNopol: 0,
-            checkoutRupiah: 0,
-            memastikanNopol: 0,
-            memastikanRupiah: 0,
-            memastikanPersen: 0,
-            menambahkanNopol: 0,
-            menambahkanRupiah: 0,
-            mengupayakan: 0,
-            gapNopol: 0,
-            sisaNopol: 0,
-            sisaRupiah: 0,
-            gapDetails: [],
-            mengupayakanCount: 0,
-          };
-        }
-
-        tempRows.push(processedRow);
-
-        if (currentSubTotal) {
-          currentSubTotal.checkinNopol += processedRow.checkinNopol;
-          currentSubTotal.checkinRupiah += processedRow.checkinRupiah;
-          currentSubTotal.checkoutNopol += processedRow.checkoutNopol;
-          currentSubTotal.checkoutRupiah += processedRow.checkoutRupiah;
-          currentSubTotal.memastikanNopol += processedRow.memastikanNopol;
-          currentSubTotal.memastikanRupiah += processedRow.memastikanRupiah;
-          currentSubTotal.menambahkanNopol += processedRow.menambahkanNopol;
-          currentSubTotal.menambahkanRupiah += processedRow.menambahkanRupiah;
-          if (processedRow.mengupayakan > 0) {
-            currentSubTotal.mengupayakan += processedRow.mengupayakan;
-            currentSubTotal.mengupayakanCount += 1;
-          }
-          currentSubTotal.gapNopol += processedRow.gapNopol;
-          currentSubTotal.sisaNopol += processedRow.sisaNopol;
-          currentSubTotal.sisaRupiah += processedRow.sisaRupiah;
-        }
-
-        setRekapData([...tempRows]);
-      }
-
-      if (currentSubTotal) {
-        currentSubTotal.memastikanPersen = currentSubTotal.checkinNopol > 0 ? currentSubTotal.memastikanNopol / currentSubTotal.checkinNopol : 0;
-        currentSubTotal.mengupayakan = currentSubTotal.mengupayakanCount > 0 ? Math.round(currentSubTotal.mengupayakan / currentSubTotal.mengupayakanCount) : 0;
-        tempRows.push(currentSubTotal);
-      }
-
-      setRekapData([...tempRows]);
-      setLoading(null);
+      setData(responses);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Terjadi Kesalahan");
-      setLoading(null);
+    } finally {
+      setLoading(false);
     }
   };
 
+  const generateRekap = () => {
+    // ... FUNGSI generateRekap TETAP SAMA, TIDAK PERLU DIUBAH ...
+    if (!data.length) {
+      console.log("Data masih kosong");
+      return;
+    }
+
+    const monthStr = month.toString().padStart(2, "0");
+    const result: RekapRow[] = [];
+    let groupSubTotal: RekapRow | null = null;
+
+    const isDateInRange = (
+      dateStr: string,
+      start: Date | null,
+      end: Date | null
+    ) => {
+      if (!start || !end || !dateStr) return false;
+      const parts = dateStr.split("/");
+      if (parts.length < 2) return false;
+      const day = parseInt(parts[0]);
+      const month = parseInt(parts[1]);
+      const date = new Date(2000, month - 1, day);
+      const startDate = new Date(2000, start.getMonth(), start.getDate());
+      const endDate = new Date(2000, end.getMonth(), end.getDate());
+      return date >= startDate && date <= endDate;
+    };
+
+    for (const loket of loketMapping) {
+      const endpointData =
+        data.find((d) => d.endpoint === loket.endpoint)?.data || [];
+      const gapDetails: GapDetail[] = [];
+      const memastikanDetails: { nopol: string; rupiah: number }[] = [];
+
+      const rekap: RekapRow = {
+        no: loket.no,
+        loketKantor: loket.childLoket,
+        petugas: loket.petugas,
+        checkinNopol: 0,
+        checkinRupiah: 0,
+        checkoutNopol: 0,
+        checkoutRupiah: 0,
+        memastikanNopol: 0,
+        memastikanRupiah: 0,
+        memastikanPersen: 0,
+        menambahkanNopol: 0,
+        menambahkanRupiah: 0,
+        mengupayakan: 0,
+        gapNopol: 0,
+        sisaNopol: 0,
+        sisaRupiah: 0,
+        gapDetails: [],
+        mengupayakanCount: 0,
+      };
+
+      // const matchedNopol = new Set<string>();
+      // let matchedRupiah = 0;
+      let totalBulanMajuTI = 0;
+      let countNopolBulanMajuTI = 0;
+      let menambahkanNopol = 0;
+      let menambahkanRupiah = 0;
+      const sisaNopolSet = new Set<string>();
+      let sisaRupiah = 0;
+
+      endpointData.forEach((item) => {
+        if (item.iwkbu_tl_tgl_transaksi) {
+          const [, mon] = item.iwkbu_tl_tgl_transaksi.split("/");
+          const monthMatch = mon === monthStr;
+          const dateRangeMatch =
+            useDateRange &&
+            isDateInRange(item.iwkbu_tl_tgl_transaksi, startDate, endDate);
+
+          if (
+            (!useDateRange && monthMatch) ||
+            (useDateRange && dateRangeMatch)
+          ) {
+            rekap.checkinNopol += item.kode_nopol_co || 0;
+            rekap.checkinRupiah += item.iwkbu_tl_rupiah_penerimaan || 0;
+          }
+        }
+      });
+
+      endpointData.forEach((item) => {
+        if (item.iwkbu_ti_tgl_transaksi) {
+          const [, mon] = item.iwkbu_ti_tgl_transaksi.split("/");
+          const monthMatch = mon === monthStr;
+          const dateRangeMatch =
+            useDateRange &&
+            isDateInRange(item.iwkbu_ti_tgl_transaksi, startDate, endDate);
+
+          if (
+            (!useDateRange && monthMatch) ||
+            (useDateRange && dateRangeMatch)
+          ) {
+            rekap.checkoutNopol += item.kode_nopol_ci || 0;
+            rekap.checkoutRupiah += item.iwkbu_ti_rupiah_penerimaan || 0;
+
+            const isMenambahkan =
+              item.tl_keterangan_konversi_iwkbu === "Armada Baru" ||
+              item.tl_keterangan_konversi_iwkbu === "Mutasi Masuk";
+
+            const isMemastikan = endpointData.some(
+              (ciItem) =>
+                ciItem.iwkbu_tl_nopol === item.iwkbu_ti_nopol &&
+                ciItem.iwkbu_tl_tgl_transaksi &&
+                ((!useDateRange &&
+                  ciItem.iwkbu_tl_tgl_transaksi.split("/")[1] === monthStr) ||
+                  (useDateRange &&
+                    isDateInRange(
+                      ciItem.iwkbu_tl_tgl_transaksi,
+                      startDate,
+                      endDate
+                    )))
+            );
+
+            if (isMenambahkan) {
+              menambahkanNopol += 1;
+              menambahkanRupiah += item.iwkbu_ti_rupiah_penerimaan || 0;
+            }
+
+            if (isMemastikan && item.iwkbu_ti_nopol) {
+              memastikanDetails.push({
+                nopol: item.iwkbu_ti_nopol,
+                rupiah: item.iwkbu_ti_rupiah_penerimaan || 0,
+              });
+              // if (!matchedNopol.has(item.iwkbu_ti_nopol)) {
+              //   matchedNopol.add(item.iwkbu_ti_nopol);
+              //   matchedRupiah += item.iwkbu_ti_rupiah_penerimaan || 0;
+              // }
+            }
+
+            if (!isMemastikan && !isMenambahkan && item.iwkbu_ti_nopol) {
+              sisaNopolSet.add(item.iwkbu_ti_nopol);
+              sisaRupiah += item.iwkbu_ti_rupiah_penerimaan || 0;
+            }
+
+            if (item.iwkbu_ti_bulan_maju > 0) {
+              totalBulanMajuTI += item.iwkbu_ti_bulan_maju;
+              countNopolBulanMajuTI++;
+            }
+          }
+        }
+      });
+
+      rekap.memastikanNopol = memastikanDetails.length;
+      rekap.memastikanRupiah = memastikanDetails.reduce(
+        (sum, detail) => sum + detail.rupiah,
+        0
+      );
+      rekap.memastikanPersen =
+        rekap.checkinNopol > 0 ? rekap.memastikanNopol / rekap.checkinNopol : 0;
+      rekap.menambahkanNopol = menambahkanNopol;
+      rekap.menambahkanRupiah = menambahkanRupiah;
+      rekap.gapNopol = rekap.checkinNopol - rekap.memastikanNopol;
+      rekap.mengupayakan =
+        countNopolBulanMajuTI > 0
+          ? Math.round(totalBulanMajuTI / rekap.checkoutNopol)
+          : 0;
+      rekap.sisaNopol = sisaNopolSet.size;
+      rekap.sisaRupiah = sisaRupiah;
+      rekap.gapDetails = gapDetails;
+
+      if (loket.parentLoket) {
+        if (groupSubTotal) {
+          groupSubTotal.memastikanPersen =
+            groupSubTotal.checkinNopol > 0
+              ? groupSubTotal.memastikanNopol / groupSubTotal.checkinNopol
+              : 0;
+          groupSubTotal.mengupayakan =
+            groupSubTotal.mengupayakanCount > 0
+              ? Math.round(
+                groupSubTotal.mengupayakan / groupSubTotal.mengupayakanCount
+              )
+              : 0;
+          result.push(groupSubTotal);
+          groupSubTotal = null;
+        }
+
+        result.push({
+          no: 0,
+          loketKantor: loket.parentLoket,
+          petugas: "",
+          checkinNopol: 0,
+          checkinRupiah: 0,
+          checkoutNopol: 0,
+          checkoutRupiah: 0,
+          memastikanNopol: 0,
+          memastikanRupiah: 0,
+          memastikanPersen: 0,
+          menambahkanNopol: 0,
+          menambahkanRupiah: 0,
+          mengupayakan: 0,
+          gapNopol: 0,
+          sisaNopol: 0,
+          sisaRupiah: 0,
+          gapDetails: [],
+          mengupayakanCount: 0,
+        });
+
+        groupSubTotal = {
+          no: 0,
+          loketKantor: "SUB TOTAL",
+          petugas: "",
+          checkinNopol: 0,
+          checkinRupiah: 0,
+          checkoutNopol: 0,
+          checkoutRupiah: 0,
+          memastikanNopol: 0,
+          memastikanRupiah: 0,
+          memastikanPersen: 0,
+          menambahkanNopol: 0,
+          menambahkanRupiah: 0,
+          mengupayakan: 0,
+          gapNopol: 0,
+          sisaNopol: 0,
+          sisaRupiah: 0,
+          gapDetails: [],
+          mengupayakanCount: 0,
+        };
+      }
+
+      result.push(rekap);
+
+      if (groupSubTotal) {
+        groupSubTotal.checkinNopol += rekap.checkinNopol;
+        groupSubTotal.checkinRupiah += rekap.checkinRupiah;
+        groupSubTotal.checkoutNopol += rekap.checkoutNopol;
+        groupSubTotal.checkoutRupiah += rekap.checkoutRupiah;
+        groupSubTotal.memastikanNopol += rekap.memastikanNopol;
+        groupSubTotal.memastikanRupiah += rekap.memastikanRupiah;
+        groupSubTotal.menambahkanNopol += rekap.menambahkanNopol;
+        groupSubTotal.menambahkanRupiah += rekap.menambahkanRupiah;
+        if (rekap.mengupayakan > 0) {
+          groupSubTotal.mengupayakan += rekap.mengupayakan;
+          groupSubTotal.mengupayakanCount =
+            (groupSubTotal.mengupayakanCount || 0) + 1;
+        }
+        groupSubTotal.gapNopol += rekap.gapNopol;
+        groupSubTotal.sisaNopol += rekap.sisaNopol;
+        groupSubTotal.sisaRupiah += rekap.sisaRupiah;
+      }
+    }
+
+    if (groupSubTotal) {
+      groupSubTotal.memastikanPersen =
+        groupSubTotal.checkinNopol > 0
+          ? groupSubTotal.memastikanNopol / groupSubTotal.checkinNopol
+          : 0;
+      groupSubTotal.mengupayakan =
+        groupSubTotal.mengupayakanCount > 0
+          ? Math.round(
+            groupSubTotal.mengupayakan / groupSubTotal.mengupayakanCount
+          )
+          : 0;
+      result.push(groupSubTotal);
+    }
+
+    setRekapData(result);
+  };
 
   useEffect(() => {
     const today = new Date();
@@ -758,6 +823,11 @@ const MemastikanData = ({
     fetchData();
   }, []);
 
+  useEffect(() => {
+    if (data.length > 0) {
+      generateRekap();
+    }
+  }, [data, month]);
 
   // --- START: LOGIKA BARU UNTUK MEMPROSES DATA DASHBOARD KUADRAN ---
   const quadrantData = useMemo(() => {
@@ -889,18 +959,8 @@ const MemastikanData = ({
 
   if (loading) {
     return (
-      <div className="inset-0 z-50 flex flex-col items-center justify-center min-h-[400px]">
-        <div className="w-full max-w-md p-6 flex flex-col items-center gap-4">
-          <div className="flex items-center gap-3">
-            <p className="text-sm font-medium animate-pulse text-blue-600">
-              {loading.message} {Math.round(loading.progress)}%
-            </p>
-          </div>
-          <Progress
-            value={loading.progress}
-            className="w-full h-2 transition-all duration-300"
-          />
-        </div>
+      <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
+        Memuat data...
       </div>
     );
   }

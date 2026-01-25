@@ -547,8 +547,10 @@ const TabelAnggaran = ({
   initialStartDate,
   initialEndDate,
 }: DateRangeProps) => {
+  const [data, setData] = useState<{ endpoint: string; data: ReportData[] }[]>(
+    []
+  );
   const [anggaranData, setAnggaranData] = useState<AnggaranRow[]>([]);
-  const [grandTotalState, setGrandTotalState] = useState<AnggaranRow | null>(null);
   const [loading, setLoading] = useState<LoadingState | null>({
     message: "Mempersiapkan data...",
     progress: 0,
@@ -599,101 +601,10 @@ const TabelAnggaran = ({
     }).format(amount);
   };
 
-  // Helper to parse DD/MM/YYYY to timestamp
-  const parseToTimestamp = (dateStr: string): number | null => {
-    if (!dateStr) return null;
-    const parts = dateStr.split("/");
-    if (parts.length < 3) return null;
-    return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])).getTime();
-  };
-
-  // Helper for O(1) range check
-  const isDateInRangeOptimized = (timestamp: number | null, startLimit: number, endLimit: number): boolean => {
-    if (timestamp === null) return false;
-    return timestamp >= startLimit && timestamp <= endLimit;
-  };
-
-  const processIndividualAnggaran = (
-    loket: any,
-    endpointData: ReportData[],
-    numberOfMonths: number,
-    tlStartLimit: number,
-    tlEndLimit: number,
-    tiStartLimit: number,
-    tiEndLimit: number
-  ): AnggaranRow => {
-    const penerimaanTL = endpointData.reduce((sum, item) => {
-      if (!item.iwkbu_tl_tgl_transaksi) return sum;
-      const ts = parseToTimestamp(item.iwkbu_tl_tgl_transaksi);
-      if (isDateInRangeOptimized(ts, tlStartLimit, tlEndLimit)) {
-        return sum + (item.iwkbu_tl_rupiah_penerimaan || 0);
-      }
-      return sum;
-    }, 0);
-
-    const penerimaanTI = endpointData.reduce((sum, item) => {
-      if (!item.iwkbu_ti_tgl_transaksi) return sum;
-      const ts = parseToTimestamp(item.iwkbu_ti_tgl_transaksi);
-      if (isDateInRangeOptimized(ts, tiStartLimit, tiEndLimit)) {
-        return sum + (item.iwkbu_ti_rupiah_penerimaan || 0);
-      }
-      return sum;
-    }, 0);
-
-    const targetAnggaranBulanBerjalan = (loket.anggaranSatuTahun / 12) * numberOfMonths;
-
-    return {
-      no: loket.no,
-      namaLoket: loket.childLoket,
-      rowType: "detail",
-      anggaranSatuTahun: loket.anggaranSatuTahun,
-      targetAnggaranBulan: targetAnggaranBulanBerjalan,
-      penerimaanTL,
-      penerimaanTI,
-      realisasi: calculateRealisasi(penerimaanTI, loket.anggaranSatuTahun),
-      gapRealisasiRupiah: penerimaanTI - targetAnggaranBulanBerjalan,
-      gapRealisasiPersen: calculateGapRealisasiPersen(penerimaanTI, targetAnggaranBulanBerjalan),
-      growthRupiah: penerimaanTI - penerimaanTL,
-      growthPersen: calculateGrowthPersen(penerimaanTI, penerimaanTL),
-    };
-  };
-
-  const updateRunningAnggaranTotal = (total: any, row: AnggaranRow) => {
-    total.anggaranSatuTahun += row.anggaranSatuTahun;
-    total.targetAnggaranBulan += row.targetAnggaranBulan;
-    total.penerimaanTL += row.penerimaanTL;
-    total.penerimaanTI += row.penerimaanTI;
-    total.gapRealisasiRupiah += row.gapRealisasiRupiah;
-    total.growthRupiah += row.growthRupiah;
-  };
-
-  const finalizeAnggaranTotal = (total: AnggaranRow) => {
-    total.realisasi = calculateRealisasi(total.penerimaanTI, total.anggaranSatuTahun);
-    total.gapRealisasiPersen = calculateGapRealisasiPersen(total.penerimaanTI, total.targetAnggaranBulan);
-    total.growthPersen = calculateGrowthPersen(total.penerimaanTI, total.penerimaanTL);
-  };
-
-  const createEmptyAnggaranRow = (namaLoket: string, type: "header" | "subtotal" | "grandtotal"): AnggaranRow => ({
-    no: 0,
-    namaLoket,
-    rowType: type,
-    anggaranSatuTahun: 0,
-    targetAnggaranBulan: 0,
-    penerimaanTL: 0,
-    penerimaanTI: 0,
-    realisasi: "0.00%",
-    gapRealisasiPersen: "0.00%",
-    gapRealisasiRupiah: 0,
-    growthPersen: "0.00%",
-    growthRupiah: 0,
-  });
-
   const fetchData = async () => {
-    if (!startDate || !endDate) return;
-    setLoading({ message: "Memulai penghitungan anggaran...", progress: 0 });
+    setLoading({ message: "Mempersiapkan pengambilan data...", progress: 0 });
     setError(null);
-    setAnggaranData([]);
-    setGrandTotalState(null);
+    setData([]);
 
     const token = Cookies.get("sessionToken");
     if (!token) {
@@ -702,67 +613,243 @@ const TabelAnggaran = ({
       return;
     }
 
-    const numberOfMonths = (endDate.getFullYear() - startDate.getFullYear()) * 12 + (endDate.getMonth() - startDate.getMonth()) + 1;
-    const tlS = new Date(startDate); tlS.setFullYear(tlS.getFullYear() - 1);
-    const tlE = new Date(endDate); tlE.setFullYear(tlE.getFullYear() - 1);
-    const tlStartLimit = new Date(tlS.getFullYear(), tlS.getMonth(), tlS.getDate()).getTime();
-    const tlEndLimit = new Date(tlE.getFullYear(), tlE.getMonth(), tlE.getDate()).getTime();
-    const tiStartLimit = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()).getTime();
-    const tiEndLimit = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate()).getTime();
-
-    let tempRows: AnggaranRow[] = [];
-    let currentSubTotal = createEmptyAnggaranRow("SUBTOTAL", "subtotal");
-    let runningGrandTotal = createEmptyAnggaranRow("GRAND TOTAL", "grandtotal");
-    let currentGroupName = "";
+    const endpoints = loketMapping.map((item) => item.endpoint.replace(`${BASE_URL}/`, ""));
 
     try {
-      for (let i = 0; i < loketMapping.length; i++) {
-        const loket = loketMapping[i];
-        const progress = Math.round(((i + 1) / loketMapping.length) * 100);
+      setLoading({ message: "Mengunduh data secara massal...", progress: 30 });
 
-        setLoading({ message: `Menganalisis Anggaran: ${loket.childLoket} (${i + 1}/${loketMapping.length})...`, progress });
+      const bulkRes = await fetch("/api/bulk-rekap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoints }),
+      });
 
-        // 1. Fetch
-        const endpoint = loket.endpoint.replace(`${BASE_URL}/`, "");
-        const res = await fetch(`/api/rekap/${endpoint}`);
-        if (!res.ok) throw new Error(`Gagal ambil data ${loket.childLoket}`);
-        const result = await res.json();
-        const rawData: ReportData[] = result.data || [];
-
-        // 2. Process
-        const processedRow = processIndividualAnggaran(loket, rawData, numberOfMonths, tlStartLimit, tlEndLimit, tiStartLimit, tiEndLimit);
-
-        // 3. Handle Grouping
-        if (loket.parentLoket) {
-          if (currentGroupName !== "") {
-            finalizeAnggaranTotal(currentSubTotal);
-            tempRows.push(currentSubTotal);
-            currentSubTotal = createEmptyAnggaranRow("SUBTOTAL", "subtotal");
-          }
-          currentGroupName = loket.parentLoket;
-          tempRows.push(createEmptyAnggaranRow(currentGroupName, "header"));
-        }
-
-        tempRows.push(processedRow);
-        updateRunningAnggaranTotal(currentSubTotal, processedRow);
-        updateRunningAnggaranTotal(runningGrandTotal, processedRow);
-
-        // Update UI progressively
-        setAnggaranData([...tempRows]);
+      if (!bulkRes.ok) {
+        throw new Error("Gagal mengunduh data secara massal");
       }
 
-      // Finalize last group and grand total
-      finalizeAnggaranTotal(currentSubTotal);
-      tempRows.push(currentSubTotal);
-      finalizeAnggaranTotal(runningGrandTotal);
+      const bulkData = await bulkRes.json();
+      const allResponses = bulkData.results.map((res: any) => ({
+        endpoint: `${BASE_URL}/${res.endpoint}`,
+        data: res.data || [],
+      }));
 
-      setAnggaranData([...tempRows]);
-      setGrandTotalState(runningGrandTotal);
-      setLoading(null);
+      setData(allResponses);
+      setLoading({ message: "Menyelesaikan data...", progress: 100 });
+      setTimeout(() => setLoading(null), 500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Terjadi Kesalahan");
       setLoading(null);
     }
+  };
+
+  const generateRekap = () => {
+    if (!data.length || !startDate || !endDate) return;
+
+    // Menghitung jumlah bulan unik dalam rentang tanggal yang dipilih
+    const monthDiff =
+      (endDate.getFullYear() - startDate.getFullYear()) * 12 +
+      (endDate.getMonth() - startDate.getMonth()) +
+      1;
+    const numberOfMonths = monthDiff;
+
+    // Helper to parse DD/MM/YYYY to timestamp
+    const parseToTimestamp = (dateStr: string): number | null => {
+      if (!dateStr) return null;
+      const parts = dateStr.split("/");
+      if (parts.length < 3) return null;
+      // Note: Months are 0-indexed in JS Date
+      return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])).getTime();
+    };
+
+    // Helper for O(1) range check
+    const isDateInRangeOptimized = (
+      timestamp: number | null,
+      startLimit: number,
+      endLimit: number
+    ): boolean => {
+      if (timestamp === null) return false;
+      return timestamp >= startLimit && timestamp <= endLimit;
+    };
+
+    // Define Date Ranges for TL (Previous Year) and TI (Current Year)
+    const selectedYear = startDate.getFullYear();
+
+    // TL uses Year - 1
+    const tlStartDate = new Date(startDate);
+    tlStartDate.setFullYear(selectedYear - 1);
+    const tlEndDate = new Date(endDate);
+    tlEndDate.setFullYear(selectedYear - 1);
+
+    // TI uses Selected Year
+    const tiStartDate = startDate;
+    const tiEndDate = endDate;
+
+    // Convert boundaries to timestamps for O(1) comparison
+    const tlStartLimit = new Date(tlStartDate.getFullYear(), tlStartDate.getMonth(), tlStartDate.getDate()).getTime();
+    const tlEndLimit = new Date(tlEndDate.getFullYear(), tlEndDate.getMonth(), tlEndDate.getDate()).getTime();
+    const tiStartLimit = new Date(tiStartDate.getFullYear(), tiStartDate.getMonth(), tiStartDate.getDate()).getTime();
+    const tiEndLimit = new Date(tiEndDate.getFullYear(), tiEndDate.getMonth(), tiEndDate.getDate()).getTime();
+
+    type GroupData = { children: AnggaranRow[] } & Omit<
+      AnggaranRow,
+      | "no"
+      | "namaLoket"
+      | "realisasi"
+      | "gapRealisasiPersen"
+      | "growthPersen"
+      | "rowType"
+    >;
+    const groupedData: Record<string, GroupData> = {};
+    let currentGroupName = "";
+
+    loketMapping.forEach((loket) => {
+      if (loket.parentLoket) {
+        currentGroupName = loket.parentLoket;
+        if (!groupedData[currentGroupName]) {
+          groupedData[currentGroupName] = {
+            children: [],
+            anggaranSatuTahun: 0,
+            targetAnggaranBulan: 0,
+            penerimaanTL: 0,
+            penerimaanTI: 0,
+            gapRealisasiRupiah: 0,
+            growthRupiah: 0,
+          };
+        }
+      }
+
+      const endpointData =
+        data.find((d) => d.endpoint === loket.endpoint)?.data || [];
+
+      // Separate TL and TI data with proper year filtering
+      const penerimaanTL = endpointData.reduce((sum, item) => {
+        if (!item.iwkbu_tl_tgl_transaksi) return sum;
+        const ts = parseToTimestamp(item.iwkbu_tl_tgl_transaksi);
+        if (isDateInRangeOptimized(ts, tlStartLimit, tlEndLimit)) {
+          return sum + (item.iwkbu_tl_rupiah_penerimaan || 0);
+        }
+        return sum;
+      }, 0);
+
+      const penerimaanTI = endpointData.reduce((sum, item) => {
+        if (!item.iwkbu_ti_tgl_transaksi) return sum;
+        const ts = parseToTimestamp(item.iwkbu_ti_tgl_transaksi);
+        if (isDateInRangeOptimized(ts, tiStartLimit, tiEndLimit)) {
+          return sum + (item.iwkbu_ti_rupiah_penerimaan || 0);
+        }
+        return sum;
+      }, 0);
+
+      const targetAnggaranBulanBerjalan =
+        (loket.anggaranSatuTahun / 12) * numberOfMonths;
+
+      const rekap: AnggaranRow = {
+        no: loket.no,
+        namaLoket: loket.childLoket,
+        rowType: "detail",
+        anggaranSatuTahun: loket.anggaranSatuTahun,
+        targetAnggaranBulan: targetAnggaranBulanBerjalan,
+        penerimaanTL,
+        penerimaanTI,
+        realisasi: calculateRealisasi(penerimaanTI, loket.anggaranSatuTahun),
+        gapRealisasiRupiah: penerimaanTI - targetAnggaranBulanBerjalan,
+        gapRealisasiPersen: calculateGapRealisasiPersen(
+          penerimaanTI,
+          targetAnggaranBulanBerjalan
+        ),
+        growthRupiah: penerimaanTI - penerimaanTL,
+        growthPersen: calculateGrowthPersen(penerimaanTI, penerimaanTL),
+      };
+
+      if (groupedData[currentGroupName]) {
+        groupedData[currentGroupName].children.push(rekap);
+        Object.keys(groupedData[currentGroupName]).forEach((key) => {
+          if (key !== "children")
+            (groupedData[currentGroupName] as any)[key] += (rekap as any)[key];
+        });
+      }
+    });
+
+    const finalResult: AnggaranRow[] = [];
+    Object.keys(groupedData).forEach((groupName) => {
+      const group = groupedData[groupName];
+      const subTotalData = {
+        anggaranSatuTahun: group.anggaranSatuTahun,
+        targetAnggaranBulan: group.targetAnggaranBulan,
+        penerimaanTL: group.penerimaanTL,
+        penerimaanTI: group.penerimaanTI,
+        gapRealisasiRupiah: group.gapRealisasiRupiah,
+        growthRupiah: group.growthRupiah,
+        realisasi: calculateRealisasi(
+          group.penerimaanTI,
+          group.anggaranSatuTahun
+        ),
+        gapRealisasiPersen: calculateGapRealisasiPersen(
+          group.penerimaanTI,
+          group.targetAnggaranBulan
+        ),
+        growthPersen: calculateGrowthPersen(
+          group.penerimaanTI,
+          group.penerimaanTL
+        ),
+      };
+
+      finalResult.push({
+        no: 0,
+        namaLoket: groupName,
+        rowType: "header",
+        ...subTotalData,
+      });
+      finalResult.push(...group.children);
+      finalResult.push({
+        no: 0,
+        namaLoket: "SUBTOTAL",
+        rowType: "subtotal",
+        ...subTotalData,
+      });
+    });
+
+    const grandTotalData = finalResult
+      .filter((r) => r.rowType === "subtotal")
+      .reduce(
+        (acc, row) => {
+          (Object.keys(acc) as Array<keyof typeof acc>).forEach(
+            (key) => (acc[key] += row[key])
+          );
+          return acc;
+        },
+        {
+          anggaranSatuTahun: 0,
+          targetAnggaranBulan: 0,
+          penerimaanTL: 0,
+          penerimaanTI: 0,
+          gapRealisasiRupiah: 0,
+          growthRupiah: 0,
+        }
+      );
+
+    if (finalResult.some((r) => r.rowType === "subtotal")) {
+      finalResult.push({
+        no: 0,
+        namaLoket: "GRAND TOTAL",
+        rowType: "grandtotal",
+        ...grandTotalData,
+        realisasi: calculateRealisasi(
+          grandTotalData.penerimaanTI,
+          grandTotalData.anggaranSatuTahun
+        ),
+        gapRealisasiPersen: calculateGapRealisasiPersen(
+          grandTotalData.penerimaanTI,
+          grandTotalData.targetAnggaranBulan
+        ),
+        growthPersen: calculateGrowthPersen(
+          grandTotalData.penerimaanTI,
+          grandTotalData.penerimaanTL
+        ),
+      });
+    }
+    setAnggaranData(finalResult);
   };
 
   useEffect(() => {
@@ -788,6 +875,13 @@ const TabelAnggaran = ({
     }
   }, []);
 
+  useEffect(() => {
+    // Hanya jalankan jika data sudah ada dan kedua tanggal sudah dipilih.
+    if (data.length > 0 && startDate && endDate) {
+      generateRekap();
+      onDateRangeChange(startDate, endDate);
+    }
+  }, [startDate, endDate, data]);
 
   if (loading) {
     return (
@@ -1025,7 +1119,54 @@ const TabelAnggaran = ({
                   );
                 }
 
-                if (row.rowType === "grandtotal") return null;
+                if (row.rowType === "grandtotal") {
+                  return (
+                    <TableRow
+                      key={index}
+                      className="bg-slate-800 text-white sticky bottom-0 z-20 hover:bg-slate-800"
+                    >
+                      <TableCell
+                        colSpan={2}
+                        className="text-right text-base sticky left-0 bg-slate-800 z-30"
+                      >
+                        {row.namaLoket}
+                      </TableCell>
+                      <TableCell className="text-right text-base">
+                        {formatRupiah(row.anggaranSatuTahun)}
+                      </TableCell>
+                      <TableCell className="text-right text-base">
+                        {formatRupiah(row.targetAnggaranBulan)}
+                      </TableCell>
+                      <TableCell className="text-right text-base">
+                        {formatRupiah(row.penerimaanTL)}
+                      </TableCell>
+                      <TableCell className="text-right text-base">
+                        {formatRupiah(row.penerimaanTI)}
+                      </TableCell>
+                      <TableCell className="text-center text-base">
+                        {row.realisasi}
+                      </TableCell>
+                      <TableCell>
+                        <PerformanceCell
+                          value={row.gapRealisasiPersen}
+                          isPercentage
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <PerformanceCell value={row.gapRealisasiRupiah} />
+                      </TableCell>
+                      <TableCell>
+                        <PerformanceCell
+                          value={row.growthPersen}
+                          isPercentage
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <PerformanceCell value={row.growthRupiah} />
+                      </TableCell>
+                    </TableRow>
+                  );
+                }
 
                 const isHidden = currentGroup && !expandedGroups[currentGroup];
                 if (isHidden) return null;
@@ -1125,51 +1266,6 @@ const TabelAnggaran = ({
               });
             })()}
           </TableBody>
-          {grandTotalState && (
-            <TableFooter className="bg-slate-800 text-white sticky bottom-0 z-20 hover:bg-slate-800">
-              <TableRow>
-                <TableCell
-                  colSpan={2}
-                  className="text-right text-base sticky left-0 bg-slate-800 z-30"
-                >
-                  {grandTotalState.namaLoket}
-                </TableCell>
-                <TableCell className="text-right text-base">
-                  {formatRupiah(grandTotalState.anggaranSatuTahun)}
-                </TableCell>
-                <TableCell className="text-right text-base">
-                  {formatRupiah(grandTotalState.targetAnggaranBulan)}
-                </TableCell>
-                <TableCell className="text-right text-base">
-                  {formatRupiah(grandTotalState.penerimaanTL)}
-                </TableCell>
-                <TableCell className="text-right text-base">
-                  {formatRupiah(grandTotalState.penerimaanTI)}
-                </TableCell>
-                <TableCell className="text-center text-base">
-                  {grandTotalState.realisasi}
-                </TableCell>
-                <TableCell>
-                  <PerformanceCell
-                    value={grandTotalState.gapRealisasiPersen}
-                    isPercentage
-                  />
-                </TableCell>
-                <TableCell>
-                  <PerformanceCell value={grandTotalState.gapRealisasiRupiah} />
-                </TableCell>
-                <TableCell>
-                  <PerformanceCell
-                    value={grandTotalState.growthPersen}
-                    isPercentage
-                  />
-                </TableCell>
-                <TableCell>
-                  <PerformanceCell value={grandTotalState.growthRupiah} />
-                </TableCell>
-              </TableRow>
-            </TableFooter>
-          )}
         </Table>
       </div>
     </div>
