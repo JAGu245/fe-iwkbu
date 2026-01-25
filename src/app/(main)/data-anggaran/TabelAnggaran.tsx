@@ -601,7 +601,7 @@ const TabelAnggaran = ({
   };
 
   const fetchData = async () => {
-    setLoading({ message: "Mempersiapkan pengambilan data...", progress: 0 });
+    setLoading({ message: "Mengambil data dari semua loket...", progress: 5 });
     setError(null);
     setData([]);
 
@@ -612,29 +612,48 @@ const TabelAnggaran = ({
       return;
     }
 
-    const endpoints = loketMapping.map((item) => item.endpoint.replace(`${BASE_URL}/`, ""));
+    const endpoints = loketMapping.map((item) =>
+      item.endpoint.replace(`${BASE_URL}/`, "")
+    );
+    const totalEndpoints = endpoints.length;
+    const batchSize = 5;
+    const accumulatedResults: any[] = [];
 
     try {
-      setLoading({ message: "Mengunduh data secara massal...", progress: 30 });
+      for (let i = 0; i < totalEndpoints; i += batchSize) {
+        const batch = endpoints.slice(i, i + batchSize);
+        const progress = Math.round((i / totalEndpoints) * 100);
 
-      const bulkRes = await fetch("/api/bulk-rekap", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ endpoints }),
-      });
+        setLoading({
+          message: `Mengunduh data massal (${i}/${totalEndpoints})...`,
+          progress,
+        });
 
-      if (!bulkRes.ok) {
-        throw new Error("Gagal mengunduh data secara massal");
+        const bulkRes = await fetch("/api/bulk-rekap", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoints: batch }),
+        });
+
+        if (!bulkRes.ok) {
+          throw new Error(`Gagal mengunduh batch ${i / batchSize + 1}`);
+        }
+
+        const batchData = await bulkRes.json();
+        accumulatedResults.push(...batchData.results);
       }
 
-      const bulkData = await bulkRes.json();
-      const allResponses = bulkData.results.map((res: any) => ({
+      setLoading({
+        message: "Memproses dan menampilkan data...",
+        progress: 100,
+      });
+
+      const responses = accumulatedResults.map((res: any) => ({
         endpoint: `${BASE_URL}/${res.endpoint}`,
         data: res.data || [],
       }));
 
-      setData(allResponses);
-      setLoading({ message: "Menyelesaikan data...", progress: 100 });
+      setData(responses);
       setTimeout(() => setLoading(null), 500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Terjadi Kesalahan");
@@ -884,20 +903,23 @@ const TabelAnggaran = ({
 
   if (loading) {
     return (
-      <div className="inset-0 z-50 flex flex-col items-center justify-center">
-        <div className="w-full max-w-md p-6 flex flex-col items-center gap-4">
-          <div className="flex items-center gap-3">
-            {/* <Loader2 className="h-4 w-4 animate-spin text-primary" /> */}
-
-            <p className="text-sm text-muted-foreground">
-              Memuat Data {`${Math.round(loading.progress)}%`}
+      <div className="inset-0 z-50 flex flex-col items-center justify-center min-h-[400px]">
+        <div className="w-full max-w-md space-y-4 p-6 text-center">
+          <div className="flex items-center justify-center gap-3">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+              {loading.message}
             </p>
           </div>
-
-          <Progress
-            value={loading.progress}
-            className="w-full transition-all duration-300"
-          />
+          <div className="space-y-2">
+            <Progress value={loading.progress} className="h-2 w-full" />
+            <p className="text-xs text-muted-foreground font-mono">
+              {loading.progress}% Selesai
+            </p>
+          </div>
+          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
+            Sistem sedang sinkronisasi dengan Google Sheets
+          </p>
         </div>
       </div>
     );

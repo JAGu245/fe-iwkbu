@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+
 const LoginPage = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -111,10 +112,16 @@ const LoginPage = () => {
         />
         {/* TOP BRANDING (OPTIONAL) */}
         <div className="absolute top-8 right-8 z-20 flex items-center gap-2 bg-white/20 backdrop-blur-md px-4 py-2 rounded-full border border-white/30">
-          <div className="w-8 h-8 rounded-full overflow-hidden">
-            <img src="/images/avatars/logo.png" className="w-full h-full object-cover" alt="Logo" />
+          <div className="w-8 h-8 rounded-full overflow-hidden relative">
+            <img
+              src="/images/avatars/logo.png"
+              alt="Logo"
+              className="w-full h-full object-cover"
+            />
           </div>
-          <span className="text-white font-bold text-sm tracking-tighter">JASARAHARJA</span>
+          <span className="text-white font-bold text-sm tracking-tighter">
+            JASARAHARJA
+          </span>
         </div>
       </div>
 
