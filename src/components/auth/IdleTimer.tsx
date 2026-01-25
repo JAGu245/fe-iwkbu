@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Cookies from "js-cookie";
 
 // Default timeout is 15 minutes
 const IDLE_TIMEOUT = 15 * 60 * 1000;
@@ -30,6 +31,21 @@ export default function IdleTimer() {
     };
 
     useEffect(() => {
+        // --- SESSION GUARD: Force logout if tab was closed/reopened ---
+        const activeTab = sessionStorage.getItem("activeSession");
+        const hasToken = Cookies.get("sessionToken");
+
+        if (hasToken && !activeTab) {
+            console.log("Tab baru/Browser restart terdeteksi. Logout otomatis...");
+            logout();
+            return;
+        }
+
+        if (hasToken) {
+            sessionStorage.setItem("activeSession", "true");
+        }
+        // -------------------------------------------------------------
+
         const events = [
             "mousemove",
             "keydown",

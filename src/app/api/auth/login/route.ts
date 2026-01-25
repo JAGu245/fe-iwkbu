@@ -33,7 +33,6 @@ export async function POST(request: Request) {
       httpOnly: false,
       secure: false, // Set to false to allow login via IP (HTTP)
       sameSite: "strict",
-      maxAge: 60 * 60 * 24, // 1 day
       path: "/",
     });
 
@@ -41,7 +40,6 @@ export async function POST(request: Request) {
       httpOnly: false,
       secure: false, // Set to false to allow login via IP (HTTP)
       sameSite: "strict",
-      maxAge: 60 * 60 * 24, // 1 day
       path: "/",
     });
 
@@ -49,7 +47,6 @@ export async function POST(request: Request) {
       httpOnly: false, // Accessible by client-side JS for sidebar logic
       secure: false, // Set to false to allow login via IP (HTTP)
       sameSite: "strict",
-      maxAge: 60 * 60 * 24, // 1 day
       path: "/",
     });
 
@@ -57,7 +54,6 @@ export async function POST(request: Request) {
       httpOnly: false,
       secure: false, // Set to false to allow login via IP (HTTP)
       sameSite: "strict",
-      maxAge: 60 * 60 * 24, // 1 day
       path: "/",
     });
 
