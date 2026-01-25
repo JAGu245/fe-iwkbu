@@ -1063,914 +1063,912 @@ const RekapDashboard = ({
     }
   };
 
-}, [month, appliedStartDate, appliedEndDate, useDateRange]); // fetchData depends on these
+  useEffect(() => {
+    const today = new Date();
+    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-useEffect(() => {
-  const today = new Date();
-  const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    setStartDate(firstDayOfMonth);
+    setEndDate(today);
+    setAppliedStartDate(firstDayOfMonth);
+    setAppliedEndDate(today);
+    setMonth(today.getMonth() + 1);
+    setUseDateRange(true);
 
-  setStartDate(firstDayOfMonth);
-  setEndDate(today);
-  setAppliedStartDate(firstDayOfMonth);
-  setAppliedEndDate(today);
-  setMonth(today.getMonth() + 1);
-  setUseDateRange(true);
+    // kirim ke parent component
+    onDateRangeChange(firstDayOfMonth, today);
 
-  // kirim ke parent component
-  onDateRangeChange(firstDayOfMonth, today);
-
-  fetchData();
-}, []);
+    fetchData();
+  }, []);
 
 
 
-const handleDetail = (row: RekapRow, type: "gap" | "memastikan") => {
-  setSelectedRow(row);
-  setDetailType(type);
-};
+  const handleDetail = (row: RekapRow, type: "gap" | "memastikan") => {
+    setSelectedRow(row);
+    setDetailType(type);
+  };
 
-if (loading) {
-  return (
-    <div className="inset-0 z-50 flex flex-col items-center justify-center min-h-[400px]">
-      <div className="w-full max-w-md space-y-4 p-6 text-center">
-        <div className="flex items-center justify-center gap-3">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{loading.message}</p>
-        </div>
-        <div className="space-y-2">
-          <Progress value={loading.progress} className="h-2 w-full" />
-          <p className="text-xs text-muted-foreground font-mono">{loading.progress}% Selesai</p>
-        </div>
-        <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
-          Sistem sedang sinkronisasi dengan Google Sheets
-        </p>
-      </div>
-    </div>
-  );
-}
-
-if (error) {
-  return (
-    <div className="p-4 text-center text-sm text-red-500">Error: {error}</div>
-  );
-}
-
-return (
-  <div className="space-y-4">
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-end gap-4 rounded-md border p-4 shadow-sm bg-white dark:bg-zinc-900">
-        <div className="w-full">
-          <label className="text-sm font-medium mb-1 block">
-            Filter Tanggal
-          </label>
-
-          {/* Date Range Container */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full">
-            {/* Start Date Picker */}
-            <div className="w-full sm:w-auto">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full sm:w-[140px] justify-start text-left font-normal text-sm",
-                      !startDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formatDateWithoutYear(startDate)}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={startDate || undefined}
-                    onSelect={(date) => {
-                      setStartDate(date || null);
-                      if (date && endDate && date > endDate) {
-                        setEndDate(null);
-                      }
-                    }}
-                    initialFocus
-                    fixedWeeks
-                    showOutsideDays
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {/* Separator */}
-            <span className="hidden sm:inline mx-1 text-gray-500">s/d</span>
-            <span className="sm:hidden text-xs text-gray-500 text-center w-full">
-              sampai dengan
-            </span>
-
-            {/* End Date Picker */}
-            <div className="w-full sm:w-auto">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full sm:w-[140px] justify-start text-left font-normal text-sm",
-                      !endDate && "text-muted-foreground"
-                    )}
-                    disabled={!startDate}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formatDateWithoutYear(endDate)}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={endDate || undefined}
-                    onSelect={(date) => setEndDate(date || null)}
-                    initialFocus
-                    fixedWeeks
-                    showOutsideDays
-                    fromDate={startDate || undefined}
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {/* Submit Button */}
-            <Button
-              onClick={filterDataByDate}
-              disabled={!startDate || !endDate}
-              className="w-full sm:w-auto sm:ml-2 mt-2 sm:mt-0"
-            >
-              Tampilkan
-            </Button>
+  if (loading) {
+    return (
+      <div className="inset-0 z-50 flex flex-col items-center justify-center min-h-[400px]">
+        <div className="w-full max-w-md space-y-4 p-6 text-center">
+          <div className="flex items-center justify-center gap-3">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{loading.message}</p>
           </div>
+          <div className="space-y-2">
+            <Progress value={loading.progress} className="h-2 w-full" />
+            <p className="text-xs text-muted-foreground font-mono">{loading.progress}% Selesai</p>
+          </div>
+          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
+            Sistem sedang sinkronisasi dengan Google Sheets
+          </p>
         </div>
       </div>
-    </div>
+    );
+  }
 
-    <div className="overflow-auto rounded-lg border shadow-md bg-white dark:bg-zinc-900">
-      <Table>
-        <TableHeader className="bg-gray-100 dark:bg-zinc-900">
-          <TableRow>
-            <TableHead className="text-gray-800 dark:text-gray-200 w-[50px] text-center">
-              NO
-            </TableHead>
-            <TableHead className="text-gray-800 dark:text-gray-200 min-w-[220px]">
-              LOKET KANTOR
-            </TableHead>
-            <TableHead className="text-gray-800 dark:text-gray-200 min-w-[160px]">
-              PETUGAS
-            </TableHead>
-            <TableHead colSpan={2} className="text-gray-800 dark:text-gray-200 text-center">
-              CHECK-IN
-            </TableHead>
-            <TableHead colSpan={2} className="text-gray-800 dark:text-gray-200 text-center">
-              CHECK-OUT
-            </TableHead>
-            <TableHead colSpan={3} className="text-gray-800 dark:text-gray-200 text-center">
-              MEMASTIKAN
-            </TableHead>
-            <TableHead className="text-gray-800 dark:text-gray-200 text-center">GAP</TableHead>
-            <TableHead className="text-gray-800 dark:text-gray-200 text-center">
-              MENGUPAYAKAN
-            </TableHead>
-            <TableHead colSpan={2} className="text-gray-800 dark:text-gray-200 text-center">
-              MENAMBAHKAN
-            </TableHead>
-            <TableHead colSpan={2} className="text-gray-800 dark:text-gray-200 text-center">
-              PENERIMAAN LEBIH
-            </TableHead>
-          </TableRow>
-          <TableRow>
-            <TableHead></TableHead>
-            <TableHead></TableHead>
-            <TableHead></TableHead>
-            <TableHead className="text-gray-800 dark:text-gray-200 text-center">NOPOL</TableHead>
-            <TableHead className="text-gray-800 dark:text-gray-200 text-center">
-              RUPIAH
-            </TableHead>
-            <TableHead className="text-gray-800 dark:text-gray-200 text-center">NOPOL</TableHead>
-            <TableHead className="text-gray-800 dark:text-gray-200 text-center">
-              RUPIAH
-            </TableHead>
-            <TableHead className="text-gray-800 dark:text-gray-200 text-center">NOPOL</TableHead>
-            <TableHead className="text-gray-800 dark:text-gray-200 text-center">
-              RUPIAH
-            </TableHead>
-            <TableHead className="text-gray-800 dark:text-gray-200 text-center">%</TableHead>
-            <TableHead className="text-gray-800 dark:text-gray-200 text-center">NOPOL</TableHead>
-            <TableHead className="text-gray-800 dark:text-gray-200 text-center">
-              Rata-rata
-              <br />
-              Bulan Maju
-            </TableHead>
-            <TableHead className="text-gray-800 dark:text-gray-200 text-center">NOPOL</TableHead>
-            <TableHead className="text-gray-800 dark:text-gray-200 text-center">
-              RUPIAH
-            </TableHead>
-            <TableHead className="text-gray-800 dark:text-gray-200 text-center">NOPOL</TableHead>
-            <TableHead className="text-gray-800 dark:text-gray-200 text-center">
-              RUPIAH
-            </TableHead>
-          </TableRow>
-        </TableHeader>
+  if (error) {
+    return (
+      <div className="p-4 text-center text-sm text-red-500">Error: {error}</div>
+    );
+  }
 
-        <TableBody>
-          {rekapRows.map((row, index) => {
-            // Identifikasi jenis baris
-            const isGroupHeader =
-              row.loketKantor === "KANWIL JAWA TENGAH" ||
-              row.loketKantor.startsWith("CABANG");
-            const isSubTotal = row.loketKantor === "SUB TOTAL";
-            const isGrandTotal = row.loketKantor === "GRAND TOTAL";
-            // Baris loket individual adalah baris yang bukan salah satu dari di atas
-            const isIndividualLoketRow =
-              !isGroupHeader && !isSubTotal && !isGrandTotal;
-            // Render baris header grup
-            if (isGroupHeader) {
-              return (
-                <TableRow
-                  key={index}
-                  className="bg-gray-300 dark:bg-zinc-700 border-accent text-gray-700 dark:text-gray-200 font-medium cursor-pointer hover:bg-gray-300 dark:hover:bg-zinc-600"
-                  onClick={() => toggleGroup(row.loketKantor)}
-                >
-                  <TableCell colSpan={16} className="px-2">
-                    <div className="flex items-center gap-3 hover:underline">
-                      {expandedGroups[row.loketKantor] ? (
-                        <Minus className="w-4 h-4 text-gray-700 dark:text-gray-200" />
-                      ) : (
-                        <Plus className="w-4 h-4 text-gray-700 dark:text-gray-200" />
+  return (
+    <div className="space-y-4">
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-4 rounded-md border p-4 shadow-sm bg-white dark:bg-zinc-900">
+          <div className="w-full">
+            <label className="text-sm font-medium mb-1 block">
+              Filter Tanggal
+            </label>
+
+            {/* Date Range Container */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full">
+              {/* Start Date Picker */}
+              <div className="w-full sm:w-auto">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full sm:w-[140px] justify-start text-left font-normal text-sm",
+                        !startDate && "text-muted-foreground"
                       )}
-                      <span>{row.loketKantor}</span>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            }
-            // Dapatkan grup parent sebelumnya (group loket)
-            const prevGroup =
-              rekapRows
-                .slice(0, index)
-                .reverse()
-                .find(
-                  (r) =>
-                    r.loketKantor.startsWith("KANWIL") ||
-                    r.loketKantor.startsWith("CABANG")
-                )?.loketKantor || "";
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {formatDateWithoutYear(startDate)}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={startDate || undefined}
+                      onSelect={(date) => {
+                        setStartDate(date || null);
+                        if (date && endDate && date > endDate) {
+                          setEndDate(null);
+                        }
+                      }}
+                      initialFocus
+                      fixedWeeks
+                      showOutsideDays
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
 
-            // Sembunyikan baris hanya jika ia adalah baris loket individual dan grup induknya ada dan di hide
-            if (
-              isIndividualLoketRow &&
-              prevGroup &&
-              !expandedGroups[prevGroup]
-            ) {
-              return null;
-            }
+              {/* Separator */}
+              <span className="hidden sm:inline mx-1 text-gray-500">s/d</span>
+              <span className="sm:hidden text-xs text-gray-500 text-center w-full">
+                sampai dengan
+              </span>
 
-            return (
-              <TableRow
-                key={index}
-                className={
-                  isGrandTotal
-                    ? "bg-gray-200 dark:bg-zinc-800 font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-zinc-700"
-                    : isSubTotal
-                      ? "bg-gray-200 dark:bg-zinc-800 font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-zinc-700"
-                      : ""
-                }
-              >
-                <TableCell className="text-center">
-                  {!isSubTotal && !isGrandTotal && row.no > 0 ? row.no : ""}
-                </TableCell>
-                <TableCell
-                  className={
-                    isSubTotal || isGrandTotal ? "font-semibold" : ""
-                  }
-                >
-                  {isSubTotal ? (
-                    <div className="flex items-center pl-2">
-                      <CornerDownRight className="w-4 h-4 mr-2 text-gray-800 dark:text-gray-200" />
-                      <span>{row.loketKantor}</span>
-                    </div>
-                  ) : (
-                    row.loketKantor
-                  )}
-                </TableCell>
-                <TableCell>{row.petugas}</TableCell>
-                <TableCell className="text-center">
-                  {row.checkinNopol > 0
-                    ? row.checkinNopol
-                    : isIndividualLoketRow
-                      ? row.placeholderChar
-                      : "-"}
-                </TableCell>
-                <TableCell className="text-right">
-                  {row.checkinRupiah > 0
-                    ? formatRupiah(row.checkinRupiah)
-                    : isIndividualLoketRow
-                      ? row.placeholderChar
-                      : "-"}
-                </TableCell>
-                <TableCell className="text-center">
-                  {row.checkoutNopol > 0
-                    ? row.checkoutNopol
-                    : isIndividualLoketRow
-                      ? row.placeholderChar
-                      : "-"}
-                </TableCell>
-                <TableCell className="text-right">
-                  {row.checkoutRupiah > 0
-                    ? formatRupiah(row.checkoutRupiah)
-                    : isIndividualLoketRow
-                      ? row.placeholderChar
-                      : "-"}
-                </TableCell>
-                <TableCell
-                  className={`text-center ${row.memastikanNopol > 0
-                    ? "cursor-pointer hover:underline font-medium text-blue-400"
-                    : ""
-                    }`}
-                  onClick={() => {
-                    if (row.memastikanNopol > 0) {
-                      handleDetail(row, "memastikan");
-                    }
-                  }}
-                >
-                  {row.memastikanNopol > 0
-                    ? row.memastikanNopol
-                    : isIndividualLoketRow
-                      ? row.placeholderChar
-                      : "-"}
-                </TableCell>
-                <TableCell className="text-right">
-                  {row.memastikanRupiah > 0
-                    ? formatRupiah(row.memastikanRupiah)
-                    : "-"}
-                </TableCell>
-                <TableCell className="text-center">
-                  {row.memastikanPersen > 0
-                    ? formatPercentage(row.memastikanPersen)
-                    : isIndividualLoketRow
-                      ? row.placeholderChar
-                      : "-"}
-                </TableCell>
-                <TableCell
-                  className={`text-center ${row.gapNopol !== 0 && !isGroupHeader && !isGrandTotal
-                    ? " cursor-pointer hover:underline font-medium text-blue-400"
-                    : ""
-                    }`}
-                  onClick={() => {
-                    if (
-                      row.gapNopol !== 0 &&
-                      !isGroupHeader &&
-                      !isGrandTotal
-                    ) {
-                      handleDetail(row, "gap");
-                    }
-                  }}
-                >
-                  {row.gapNopol !== 0
-                    ? row.gapNopol
-                    : isIndividualLoketRow
-                      ? row.placeholderChar
-                      : "-"}
-                </TableCell>
-                <TableCell className="text-center">
-                  {row.mengupayakan !== 0
-                    ? row.mengupayakan
-                    : isIndividualLoketRow
-                      ? row.placeholderChar
-                      : "-"}
-                </TableCell>
-                <TableCell className="text-center">
-                  {row.menambahkanNopol > 0
-                    ? row.menambahkanNopol
-                    : isIndividualLoketRow
-                      ? row.placeholderChar
-                      : "-"}
-                </TableCell>
-                <TableCell className="text-right">
-                  {row.menambahkanRupiah > 0
-                    ? formatRupiah(row.menambahkanRupiah)
-                    : isIndividualLoketRow
-                      ? row.placeholderChar
-                      : "-"}
-                </TableCell>
-                <TableCell className="text-center">
-                  {row.sisaNopol > 0
-                    ? row.sisaNopol
-                    : isIndividualLoketRow
-                      ? row.placeholderChar
-                      : "-"}
-                </TableCell>
-                <TableCell className="text-right">
-                  {row.sisaRupiah > 0
-                    ? formatRupiah(row.sisaRupiah)
-                    : isIndividualLoketRow
-                      ? row.placeholderChar
-                      : "-"}
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-        {grandTotalState && (
-          <TableFooter className="bg-blue-600 text-white font-bold hover:bg-blue-700 h-10">
-            <TableRow>
-              <TableCell className="text-center"></TableCell>
-              <TableCell className="px-4">GRAND TOTAL</TableCell>
-              <TableCell></TableCell>
-              <TableCell className="text-center">
-                {grandTotalState.checkinNopol.toLocaleString("id-ID")}
-              </TableCell>
-              <TableCell className="text-center font-mono">
-                {formatRupiah(grandTotalState.checkinRupiah)}
-              </TableCell>
-              <TableCell className="text-center">
-                {grandTotalState.checkoutNopol.toLocaleString("id-ID")}
-              </TableCell>
-              <TableCell className="text-center font-mono">
-                {formatRupiah(grandTotalState.checkoutRupiah)}
-              </TableCell>
-              <TableCell className="text-center">
-                {grandTotalState.memastikanNopol.toLocaleString("id-ID")}
-              </TableCell>
-              <TableCell className="text-center font-mono">
-                {formatRupiah(grandTotalState.memastikanRupiah)}
-              </TableCell>
-              <TableCell className="text-center">
-                {formatPercentage(grandTotalState.memastikanPersen)}
-              </TableCell>
-              <TableCell
-                className="text-center text-yellow-300 underline cursor-pointer"
-                onClick={() => handleDetail(grandTotalState, "gap")}
-              >
-                {grandTotalState.gapNopol.toLocaleString("id-ID")}
-              </TableCell>
-              <TableCell className="text-center">
-                {grandTotalState.mengupayakan} Bln
-              </TableCell>
-              <TableCell className="text-center">
-                {grandTotalState.menambahkanNopol.toLocaleString("id-ID")}
-              </TableCell>
-              <TableCell className="text-center font-mono">
-                {formatRupiah(grandTotalState.menambahkanRupiah)}
-              </TableCell>
-              <TableCell className="text-center">
-                {grandTotalState.sisaNopol.toLocaleString("id-ID")}
-              </TableCell>
-              <TableCell className="text-center font-mono">
-                {formatRupiah(grandTotalState.sisaRupiah)}
-              </TableCell>
-            </TableRow>
-          </TableFooter>
-        )}
-      </Table>
-    </div>
-    {/* Detail Modal */}
-    {selectedRow && (
-      <div className="fixed inset-0 bg-white/30 dark:bg-black/60 backdrop-blur-lg backdrop-saturate-150 flex items-center justify-center z-50 p-4">
-        <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col border dark:border-zinc-800">
-          {/* Header */}
-          <div className="flex justify-between items-start p-5 border-b dark:border-zinc-800">
-            <div>
-              <h3 className="text-xl font-bold text-gray-800 dark:text-white">
-                {detailType === "gap"
-                  ? `Detail GAP Nopol - ${selectedRow.loketKantor}`
-                  : `Detail Memastikan Nopol - ${selectedRow.loketKantor}`}
-                {selectedRow.loketKantor === "SUB TOTAL" &&
-                  " (Breakdown per Loket)"}
-              </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                {selectedRow.petugas || "-"}
-              </p>
-            </div>
-            <div className="flex gap-2 items-center">
+              {/* End Date Picker */}
+              <div className="w-full sm:w-auto">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full sm:w-[140px] justify-start text-left font-normal text-sm",
+                        !endDate && "text-muted-foreground"
+                      )}
+                      disabled={!startDate}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {formatDateWithoutYear(endDate)}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={endDate || undefined}
+                      onSelect={(date) => setEndDate(date || null)}
+                      initialFocus
+                      fixedWeeks
+                      showOutsideDays
+                      fromDate={startDate || undefined}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Submit Button */}
               <Button
-                onClick={() =>
-                  exportGapDetailsToExcel(selectedRow, detailType)
-                }
-                className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2 px-4 py-2 text-sm rounded-md shadow"
+                onClick={filterDataByDate}
+                disabled={!startDate || !endDate}
+                className="w-full sm:w-auto sm:ml-2 mt-2 sm:mt-0"
               >
-                <FileSpreadsheet className="w-4 h-4" />
-                Export Excel
+                Tampilkan
               </Button>
             </div>
           </div>
+        </div>
+      </div>
 
-          {/* Stats Summary */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-5 bg-gray-50 dark:bg-zinc-950/50 border-b dark:border-zinc-800">
-            {detailType === "gap" ? (
-              <>
-                <div className="bg-white dark:bg-zinc-800 p-3 rounded-md shadow-sm border dark:border-zinc-700">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">CheckIn</p>
-                  <p className="text-lg font-semibold dark:text-white">
-                    {selectedRow.checkinNopol} nopol
-                  </p>
-                </div>
-                <div className="bg-white dark:bg-zinc-800 p-3 rounded-md shadow-sm border dark:border-zinc-700">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Memastikan</p>
-                  <p className="text-lg font-semibold dark:text-white">
-                    {selectedRow.memastikanNopol} nopol
-                  </p>
-                </div>
-                <div className="bg-white dark:bg-zinc-800 p-3 rounded-md shadow-sm border dark:border-zinc-700">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Total GAP</p>
-                  <p className="text-lg font-semibold dark:text-white">
-                    {selectedRow.gapNopol} nopol
-                  </p>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="bg-white dark:bg-zinc-800 p-3 rounded-md shadow-sm border dark:border-zinc-700">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">CheckIn</p>
-                  <p className="text-lg font-semibold dark:text-white">
-                    {selectedRow.checkinNopol} nopol
-                  </p>
-                </div>
-                <div className="bg-white dark:bg-zinc-800 p-3 rounded-md shadow-sm border dark:border-zinc-700">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">CheckOut</p>
-                  <p className="text-lg font-semibold dark:text-white">
-                    {selectedRow.checkoutNopol} nopol
-                  </p>
-                </div>
-                <div className="bg-white dark:bg-zinc-800 p-3 rounded-md shadow-sm border dark:border-zinc-700">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Total Memastikan</p>
-                  <p className="text-lg font-semibold dark:text-white">
-                    {selectedRow.memastikanNopol} nopol
-                  </p>
-                </div>
-              </>
-            )}
-          </div>
+      <div className="overflow-auto rounded-lg border shadow-md bg-white dark:bg-zinc-900">
+        <Table>
+          <TableHeader className="bg-gray-100 dark:bg-zinc-900">
+            <TableRow>
+              <TableHead className="text-gray-800 dark:text-gray-200 w-[50px] text-center">
+                NO
+              </TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 min-w-[220px]">
+                LOKET KANTOR
+              </TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 min-w-[160px]">
+                PETUGAS
+              </TableHead>
+              <TableHead colSpan={2} className="text-gray-800 dark:text-gray-200 text-center">
+                CHECK-IN
+              </TableHead>
+              <TableHead colSpan={2} className="text-gray-800 dark:text-gray-200 text-center">
+                CHECK-OUT
+              </TableHead>
+              <TableHead colSpan={3} className="text-gray-800 dark:text-gray-200 text-center">
+                MEMASTIKAN
+              </TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">GAP</TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">
+                MENGUPAYAKAN
+              </TableHead>
+              <TableHead colSpan={2} className="text-gray-800 dark:text-gray-200 text-center">
+                MENAMBAHKAN
+              </TableHead>
+              <TableHead colSpan={2} className="text-gray-800 dark:text-gray-200 text-center">
+                PENERIMAAN LEBIH
+              </TableHead>
+            </TableRow>
+            <TableRow>
+              <TableHead></TableHead>
+              <TableHead></TableHead>
+              <TableHead></TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">NOPOL</TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">
+                RUPIAH
+              </TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">NOPOL</TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">
+                RUPIAH
+              </TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">NOPOL</TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">
+                RUPIAH
+              </TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">%</TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">NOPOL</TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">
+                Rata-rata
+                <br />
+                Bulan Maju
+              </TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">NOPOL</TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">
+                RUPIAH
+              </TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">NOPOL</TableHead>
+              <TableHead className="text-gray-800 dark:text-gray-200 text-center">
+                RUPIAH
+              </TableHead>
+            </TableRow>
+          </TableHeader>
 
-          {/* Table Container */}
-          <div className="flex-1 overflow-auto">
-            {detailType === "gap" ? (
-              selectedRow.loketKantor === "SUB TOTAL" ? (
-                /* Special view for SUB TOTAL rows */
+          <TableBody>
+            {rekapRows.map((row, index) => {
+              // Identifikasi jenis baris
+              const isGroupHeader =
+                row.loketKantor === "KANWIL JAWA TENGAH" ||
+                row.loketKantor.startsWith("CABANG");
+              const isSubTotal = row.loketKantor === "SUB TOTAL";
+              const isGrandTotal = row.loketKantor === "GRAND TOTAL";
+              // Baris loket individual adalah baris yang bukan salah satu dari di atas
+              const isIndividualLoketRow =
+                !isGroupHeader && !isSubTotal && !isGrandTotal;
+              // Render baris header grup
+              if (isGroupHeader) {
+                return (
+                  <TableRow
+                    key={index}
+                    className="bg-gray-300 dark:bg-zinc-700 border-accent text-gray-700 dark:text-gray-200 font-medium cursor-pointer hover:bg-gray-300 dark:hover:bg-zinc-600"
+                    onClick={() => toggleGroup(row.loketKantor)}
+                  >
+                    <TableCell colSpan={16} className="px-2">
+                      <div className="flex items-center gap-3 hover:underline">
+                        {expandedGroups[row.loketKantor] ? (
+                          <Minus className="w-4 h-4 text-gray-700 dark:text-gray-200" />
+                        ) : (
+                          <Plus className="w-4 h-4 text-gray-700 dark:text-gray-200" />
+                        )}
+                        <span>{row.loketKantor}</span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              }
+              // Dapatkan grup parent sebelumnya (group loket)
+              const prevGroup =
+                rekapRows
+                  .slice(0, index)
+                  .reverse()
+                  .find(
+                    (r) =>
+                      r.loketKantor.startsWith("KANWIL") ||
+                      r.loketKantor.startsWith("CABANG")
+                  )?.loketKantor || "";
+
+              // Sembunyikan baris hanya jika ia adalah baris loket individual dan grup induknya ada dan di hide
+              if (
+                isIndividualLoketRow &&
+                prevGroup &&
+                !expandedGroups[prevGroup]
+              ) {
+                return null;
+              }
+
+              return (
+                <TableRow
+                  key={index}
+                  className={
+                    isGrandTotal
+                      ? "bg-gray-200 dark:bg-zinc-800 font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-zinc-700"
+                      : isSubTotal
+                        ? "bg-gray-200 dark:bg-zinc-800 font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-zinc-700"
+                        : ""
+                  }
+                >
+                  <TableCell className="text-center">
+                    {!isSubTotal && !isGrandTotal && row.no > 0 ? row.no : ""}
+                  </TableCell>
+                  <TableCell
+                    className={
+                      isSubTotal || isGrandTotal ? "font-semibold" : ""
+                    }
+                  >
+                    {isSubTotal ? (
+                      <div className="flex items-center pl-2">
+                        <CornerDownRight className="w-4 h-4 mr-2 text-gray-800 dark:text-gray-200" />
+                        <span>{row.loketKantor}</span>
+                      </div>
+                    ) : (
+                      row.loketKantor
+                    )}
+                  </TableCell>
+                  <TableCell>{row.petugas}</TableCell>
+                  <TableCell className="text-center">
+                    {row.checkinNopol > 0
+                      ? row.checkinNopol
+                      : isIndividualLoketRow
+                        ? row.placeholderChar
+                        : "-"}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {row.checkinRupiah > 0
+                      ? formatRupiah(row.checkinRupiah)
+                      : isIndividualLoketRow
+                        ? row.placeholderChar
+                        : "-"}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {row.checkoutNopol > 0
+                      ? row.checkoutNopol
+                      : isIndividualLoketRow
+                        ? row.placeholderChar
+                        : "-"}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {row.checkoutRupiah > 0
+                      ? formatRupiah(row.checkoutRupiah)
+                      : isIndividualLoketRow
+                        ? row.placeholderChar
+                        : "-"}
+                  </TableCell>
+                  <TableCell
+                    className={`text-center ${row.memastikanNopol > 0
+                      ? "cursor-pointer hover:underline font-medium text-blue-400"
+                      : ""
+                      }`}
+                    onClick={() => {
+                      if (row.memastikanNopol > 0) {
+                        handleDetail(row, "memastikan");
+                      }
+                    }}
+                  >
+                    {row.memastikanNopol > 0
+                      ? row.memastikanNopol
+                      : isIndividualLoketRow
+                        ? row.placeholderChar
+                        : "-"}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {row.memastikanRupiah > 0
+                      ? formatRupiah(row.memastikanRupiah)
+                      : "-"}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {row.memastikanPersen > 0
+                      ? formatPercentage(row.memastikanPersen)
+                      : isIndividualLoketRow
+                        ? row.placeholderChar
+                        : "-"}
+                  </TableCell>
+                  <TableCell
+                    className={`text-center ${row.gapNopol !== 0 && !isGroupHeader && !isGrandTotal
+                      ? " cursor-pointer hover:underline font-medium text-blue-400"
+                      : ""
+                      }`}
+                    onClick={() => {
+                      if (
+                        row.gapNopol !== 0 &&
+                        !isGroupHeader &&
+                        !isGrandTotal
+                      ) {
+                        handleDetail(row, "gap");
+                      }
+                    }}
+                  >
+                    {row.gapNopol !== 0
+                      ? row.gapNopol
+                      : isIndividualLoketRow
+                        ? row.placeholderChar
+                        : "-"}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {row.mengupayakan !== 0
+                      ? row.mengupayakan
+                      : isIndividualLoketRow
+                        ? row.placeholderChar
+                        : "-"}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {row.menambahkanNopol > 0
+                      ? row.menambahkanNopol
+                      : isIndividualLoketRow
+                        ? row.placeholderChar
+                        : "-"}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {row.menambahkanRupiah > 0
+                      ? formatRupiah(row.menambahkanRupiah)
+                      : isIndividualLoketRow
+                        ? row.placeholderChar
+                        : "-"}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {row.sisaNopol > 0
+                      ? row.sisaNopol
+                      : isIndividualLoketRow
+                        ? row.placeholderChar
+                        : "-"}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {row.sisaRupiah > 0
+                      ? formatRupiah(row.sisaRupiah)
+                      : isIndividualLoketRow
+                        ? row.placeholderChar
+                        : "-"}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+          {grandTotalState && (
+            <TableFooter className="bg-blue-600 text-white font-bold hover:bg-blue-700 h-10">
+              <TableRow>
+                <TableCell className="text-center"></TableCell>
+                <TableCell className="px-4">GRAND TOTAL</TableCell>
+                <TableCell></TableCell>
+                <TableCell className="text-center">
+                  {grandTotalState.checkinNopol.toLocaleString("id-ID")}
+                </TableCell>
+                <TableCell className="text-center font-mono">
+                  {formatRupiah(grandTotalState.checkinRupiah)}
+                </TableCell>
+                <TableCell className="text-center">
+                  {grandTotalState.checkoutNopol.toLocaleString("id-ID")}
+                </TableCell>
+                <TableCell className="text-center font-mono">
+                  {formatRupiah(grandTotalState.checkoutRupiah)}
+                </TableCell>
+                <TableCell className="text-center">
+                  {grandTotalState.memastikanNopol.toLocaleString("id-ID")}
+                </TableCell>
+                <TableCell className="text-center font-mono">
+                  {formatRupiah(grandTotalState.memastikanRupiah)}
+                </TableCell>
+                <TableCell className="text-center">
+                  {formatPercentage(grandTotalState.memastikanPersen)}
+                </TableCell>
+                <TableCell
+                  className="text-center text-yellow-300 underline cursor-pointer"
+                  onClick={() => handleDetail(grandTotalState, "gap")}
+                >
+                  {grandTotalState.gapNopol.toLocaleString("id-ID")}
+                </TableCell>
+                <TableCell className="text-center">
+                  {grandTotalState.mengupayakan} Bln
+                </TableCell>
+                <TableCell className="text-center">
+                  {grandTotalState.menambahkanNopol.toLocaleString("id-ID")}
+                </TableCell>
+                <TableCell className="text-center font-mono">
+                  {formatRupiah(grandTotalState.menambahkanRupiah)}
+                </TableCell>
+                <TableCell className="text-center">
+                  {grandTotalState.sisaNopol.toLocaleString("id-ID")}
+                </TableCell>
+                <TableCell className="text-center font-mono">
+                  {formatRupiah(grandTotalState.sisaRupiah)}
+                </TableCell>
+              </TableRow>
+            </TableFooter>
+          )}
+        </Table>
+      </div>
+      {/* Detail Modal */}
+      {selectedRow && (
+        <div className="fixed inset-0 bg-white/30 dark:bg-black/60 backdrop-blur-lg backdrop-saturate-150 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col border dark:border-zinc-800">
+            {/* Header */}
+            <div className="flex justify-between items-start p-5 border-b dark:border-zinc-800">
+              <div>
+                <h3 className="text-xl font-bold text-gray-800 dark:text-white">
+                  {detailType === "gap"
+                    ? `Detail GAP Nopol - ${selectedRow.loketKantor}`
+                    : `Detail Memastikan Nopol - ${selectedRow.loketKantor}`}
+                  {selectedRow.loketKantor === "SUB TOTAL" &&
+                    " (Breakdown per Loket)"}
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  {selectedRow.petugas || "-"}
+                </p>
+              </div>
+              <div className="flex gap-2 items-center">
+                <Button
+                  onClick={() =>
+                    exportGapDetailsToExcel(selectedRow, detailType)
+                  }
+                  className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2 px-4 py-2 text-sm rounded-md shadow"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  Export Excel
+                </Button>
+              </div>
+            </div>
+
+            {/* Stats Summary */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-5 bg-gray-50 dark:bg-zinc-950/50 border-b dark:border-zinc-800">
+              {detailType === "gap" ? (
+                <>
+                  <div className="bg-white dark:bg-zinc-800 p-3 rounded-md shadow-sm border dark:border-zinc-700">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">CheckIn</p>
+                    <p className="text-lg font-semibold dark:text-white">
+                      {selectedRow.checkinNopol} nopol
+                    </p>
+                  </div>
+                  <div className="bg-white dark:bg-zinc-800 p-3 rounded-md shadow-sm border dark:border-zinc-700">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Memastikan</p>
+                    <p className="text-lg font-semibold dark:text-white">
+                      {selectedRow.memastikanNopol} nopol
+                    </p>
+                  </div>
+                  <div className="bg-white dark:bg-zinc-800 p-3 rounded-md shadow-sm border dark:border-zinc-700">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Total GAP</p>
+                    <p className="text-lg font-semibold dark:text-white">
+                      {selectedRow.gapNopol} nopol
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="bg-white dark:bg-zinc-800 p-3 rounded-md shadow-sm border dark:border-zinc-700">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">CheckIn</p>
+                    <p className="text-lg font-semibold dark:text-white">
+                      {selectedRow.checkinNopol} nopol
+                    </p>
+                  </div>
+                  <div className="bg-white dark:bg-zinc-800 p-3 rounded-md shadow-sm border dark:border-zinc-700">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">CheckOut</p>
+                    <p className="text-lg font-semibold dark:text-white">
+                      {selectedRow.checkoutNopol} nopol
+                    </p>
+                  </div>
+                  <div className="bg-white dark:bg-zinc-800 p-3 rounded-md shadow-sm border dark:border-zinc-700">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Total Memastikan</p>
+                    <p className="text-lg font-semibold dark:text-white">
+                      {selectedRow.memastikanNopol} nopol
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Table Container */}
+            <div className="flex-1 overflow-auto">
+              {detailType === "gap" ? (
+                selectedRow.loketKantor === "SUB TOTAL" ? (
+                  /* Special view for SUB TOTAL rows */
+                  <Table className="min-w-full">
+                    <TableHeader className="bg-gray-100 dark:bg-zinc-800 sticky top-0">
+                      <TableRow>
+                        <TableHead className="min-w-[200px] dark:text-gray-200">Loket</TableHead>
+                        <TableHead className="min-w-[200px] dark:text-gray-200">
+                          Keterangan
+                        </TableHead>
+                        <TableHead className="text-center dark:text-gray-200">
+                          Jumlah Nopol
+                        </TableHead>
+                        <TableHead className="text-right dark:text-gray-200">
+                          Total Nilai
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(() => {
+                        // Group gap details by loket and then by keterangan
+                        const groupedByLoket = selectedRow.gapDetails.reduce(
+                          (groups, item) => {
+                            const loket = item.loket || "Unknown";
+                            const keterangan = item.keterangan || "-";
+
+                            if (!groups[loket]) {
+                              groups[loket] = {};
+                            }
+
+                            if (!groups[loket][keterangan]) {
+                              groups[loket][keterangan] = {
+                                count: 0,
+                                total: 0,
+                              };
+                            }
+
+                            groups[loket][keterangan].count++;
+                            groups[loket][keterangan].total += item.rupiah;
+                            return groups;
+                          },
+                          {} as Record<
+                            string,
+                            Record<string, { count: number; total: number }>
+                          >
+                        );
+
+                        // If no data
+                        if (Object.keys(groupedByLoket).length === 0) {
+                          return (
+                            <TableRow>
+                              <TableCell
+                                colSpan={4}
+                                className="py-8 text-center text-gray-500 dark:text-gray-400"
+                              >
+                                Tidak ada data detail GAP
+                              </TableCell>
+                            </TableRow>
+                          );
+                        }
+
+                        // Render grouped data
+                        return Object.entries(groupedByLoket).flatMap(
+                          ([loket, keteranganGroups], loketIndex) => {
+                            const loketTotal = Object.values(
+                              keteranganGroups
+                            ).reduce((sum, { total }) => sum + total, 0);
+                            const loketCount = Object.values(
+                              keteranganGroups
+                            ).reduce((sum, { count }) => sum + count, 0);
+
+                            return [
+                              // Loket header row
+                              <TableRow
+                                key={`loket-${loketIndex}`}
+                                className="bg-gray-50 dark:bg-zinc-800/50 font-medium"
+                              >
+                                <TableCell className="font-semibold dark:text-gray-200">
+                                  {loket}
+                                </TableCell>
+                                <TableCell
+                                  colSpan={3}
+                                  className="font-semibold dark:text-gray-300"
+                                >
+                                  Total: {loketCount} Nopol (
+                                  {formatRupiah(loketTotal)})
+                                </TableCell>
+                              </TableRow>,
+                              // Keterangan rows
+                              ...Object.entries(keteranganGroups).map(
+                                (
+                                  [keterangan, { count, total }],
+                                  keteranganIndex
+                                ) => (
+                                  <TableRow
+                                    key={`keterangan-${loketIndex}-${keteranganIndex}`}
+                                  >
+                                    <TableCell className="dark:text-gray-400"></TableCell>
+                                    <TableCell className="dark:text-gray-300">{keterangan}</TableCell>
+                                    <TableCell className="text-center dark:text-gray-300">
+                                      {count} Nopol
+                                    </TableCell>
+                                    <TableCell className="text-right dark:text-gray-300">
+                                      {formatRupiah(total)}
+                                    </TableCell>
+                                  </TableRow>
+                                )
+                              ),
+                            ];
+                          }
+                        );
+                      })()}
+                    </TableBody>
+                    {selectedRow.gapDetails.length > 0 && (
+                      <TableFooter className="bg-gray-100 sticky bottom-0">
+                        <TableRow className="font-bold border-none">
+                          <TableCell className="dark:text-white">Grand Total</TableCell>
+                          <TableCell></TableCell>
+                          <TableCell className="text-center dark:text-white">
+                            {selectedRow.gapDetails.length} Nopol
+                          </TableCell>
+                          <TableCell className="text-right dark:text-white">
+                            {formatRupiah(
+                              selectedRow.gapDetails.reduce(
+                                (sum, item) => sum + item.rupiah,
+                                0
+                              )
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      </TableFooter>
+                    )}
+                  </Table>
+                ) : (
+                  /* Regular view for non-SUB TOTAL rows */
+                  <Table className="min-w-full">
+                    <TableHeader className="bg-gray-100 dark:bg-zinc-800 sticky top-0">
+                      <TableRow>
+                        <TableHead className="w-[60px] text-center">
+                          No
+                        </TableHead>
+                        <TableHead className="min-w-[120px] text-center">
+                          No. Polisi
+                        </TableHead>
+                        <TableHead className="min-w-[150px] text-center">
+                          Keterangan
+                        </TableHead>
+                        <TableHead className="min-w-[120px] text-right">
+                          Nilai
+                        </TableHead>
+                        <TableHead className="min-w-[120px] text-right">
+                          Tanggal
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(() => {
+                        // Group gap details by keterangan
+                        const groupedDetails = selectedRow.gapDetails.reduce(
+                          (groups, item) => {
+                            const key = item.keterangan || "-";
+                            if (!groups[key]) {
+                              groups[key] = [];
+                            }
+                            groups[key].push(item);
+                            return groups;
+                          },
+                          {} as Record<string, GapDetail[]>
+                        );
+
+                        // If no data
+                        if (Object.keys(groupedDetails).length === 0) {
+                          return (
+                            <TableRow>
+                              <TableCell
+                                colSpan={5}
+                                className="py-8 text-center text-gray-500 dark:text-gray-400"
+                              >
+                                Tidak ada data detail GAP
+                              </TableCell>
+                            </TableRow>
+                          );
+                        }
+
+                        // Render grouped data
+                        let rowIndex = 0;
+                        return Object.entries(groupedDetails).flatMap(
+                          ([keterangan, items], groupIndex) => {
+                            const subtotal = items.reduce(
+                              (sum, item) => sum + item.rupiah,
+                              0
+                            );
+
+                            return [
+                              // Group header row
+                              <TableRow
+                                key={`header-${groupIndex}`}
+                                className="bg-gray-50 dark:bg-zinc-800/50"
+                              >
+                                <TableCell
+                                  colSpan={5}
+                                  className="font-semibold text-gray-800 dark:text-gray-200"
+                                >
+                                  {keterangan} ({items.length} Nopol)
+                                </TableCell>
+                              </TableRow>,
+                              // Item rows
+                              ...items.map((item, itemIndex) => {
+                                rowIndex++;
+                                return (
+                                  <TableRow
+                                    key={`item-${groupIndex}-${itemIndex}`}
+                                  >
+                                    <TableCell className="py-2 font-medium text-center dark:text-gray-300">
+                                      {rowIndex}
+                                    </TableCell>
+                                    <TableCell className="py-2 font-mono text-center dark:text-gray-300">
+                                      {item.nopol}
+                                    </TableCell>
+                                    <TableCell className="py-2 text-center dark:text-gray-300">
+                                      {item.keterangan}
+                                    </TableCell>
+                                    <TableCell className="py-2 text-right dark:text-gray-300">
+                                      {formatRupiah(item.rupiah)}
+                                    </TableCell>
+                                    <TableCell className="py-2 text-right dark:text-gray-300">
+                                      {item.tgl_transaksi}
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              }),
+                              // Subtotal row
+                              <TableRow
+                                key={`subtotal-${groupIndex}`}
+                                className="bg-blue-50 dark:bg-blue-900/20 font-medium"
+                              >
+                                <TableCell colSpan={3} className="text-right dark:text-gray-300">
+                                  Subtotal {keterangan}
+                                </TableCell>
+                                <TableCell className="text-right dark:text-gray-300">
+                                  {formatRupiah(subtotal)}
+                                </TableCell>
+                                <TableCell></TableCell>
+                              </TableRow>,
+                            ];
+                          }
+                        );
+                      })()}
+                    </TableBody>
+                    {/* Grand total row */}
+                    {selectedRow.gapDetails.length > 0 && (
+                      <TableFooter className="bg-gray-100 dark:bg-zinc-800 sticky bottom-0 border-t dark:border-zinc-700">
+                        <TableRow className="font-bold">
+                          <TableCell colSpan={3} className="text-right dark:text-white">
+                            Grand Total
+                          </TableCell>
+                          <TableCell className="text-right dark:text-white">
+                            {formatRupiah(
+                              selectedRow.gapDetails.reduce(
+                                (sum, item) => sum + item.rupiah,
+                                0
+                              )
+                            )}
+                          </TableCell>
+                          <TableCell></TableCell>
+                        </TableRow>
+                      </TableFooter>
+                    )}
+                  </Table>
+                )
+              ) : selectedRow.loketKantor === "SUB TOTAL" ? (
                 <Table className="min-w-full">
                   <TableHeader className="bg-gray-100 dark:bg-zinc-800 sticky top-0">
                     <TableRow>
                       <TableHead className="min-w-[200px] dark:text-gray-200">Loket</TableHead>
-                      <TableHead className="min-w-[200px] dark:text-gray-200">
-                        Keterangan
-                      </TableHead>
                       <TableHead className="text-center dark:text-gray-200">
                         Jumlah Nopol
                       </TableHead>
-                      <TableHead className="text-right dark:text-gray-200">
-                        Total Nilai
-                      </TableHead>
+                      <TableHead className="text-right dark:text-gray-200">Total Nilai</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {(() => {
-                      // Group gap details by loket and then by keterangan
-                      const groupedByLoket = selectedRow.gapDetails.reduce(
-                        (groups, item) => {
+                      const groupedByLoket =
+                        selectedRow.memastikanDetails.reduce((groups, item) => {
                           const loket = item.loket || "Unknown";
-                          const keterangan = item.keterangan || "-";
-
                           if (!groups[loket]) {
-                            groups[loket] = {};
+                            groups[loket] = { count: 0, total: 0 };
                           }
-
-                          if (!groups[loket][keterangan]) {
-                            groups[loket][keterangan] = {
-                              count: 0,
-                              total: 0,
-                            };
-                          }
-
-                          groups[loket][keterangan].count++;
-                          groups[loket][keterangan].total += item.rupiah;
+                          groups[loket].count++;
+                          groups[loket].total += item.rupiah;
                           return groups;
-                        },
-                        {} as Record<
-                          string,
-                          Record<string, { count: number; total: number }>
-                        >
-                      );
+                        }, {} as Record<string, { count: number; total: number }>);
 
-                      // If no data
-                      if (Object.keys(groupedByLoket).length === 0) {
-                        return (
-                          <TableRow>
-                            <TableCell
-                              colSpan={4}
-                              className="py-8 text-center text-gray-500 dark:text-gray-400"
-                            >
-                              Tidak ada data detail GAP
+                      return Object.entries(groupedByLoket).map(
+                        ([loket, { count, total }], index) => (
+                          <TableRow key={index} className="border-b dark:border-zinc-800">
+                            <TableCell className="font-semibold dark:text-gray-300">
+                              {loket}
+                            </TableCell>
+                            <TableCell className="text-center dark:text-gray-300">
+                              {count} Nopol
+                            </TableCell>
+                            <TableCell className="text-right dark:text-gray-300">
+                              {formatRupiah(total)}
                             </TableCell>
                           </TableRow>
-                        );
-                      }
-
-                      // Render grouped data
-                      return Object.entries(groupedByLoket).flatMap(
-                        ([loket, keteranganGroups], loketIndex) => {
-                          const loketTotal = Object.values(
-                            keteranganGroups
-                          ).reduce((sum, { total }) => sum + total, 0);
-                          const loketCount = Object.values(
-                            keteranganGroups
-                          ).reduce((sum, { count }) => sum + count, 0);
-
-                          return [
-                            // Loket header row
-                            <TableRow
-                              key={`loket-${loketIndex}`}
-                              className="bg-gray-50 dark:bg-zinc-800/50 font-medium"
-                            >
-                              <TableCell className="font-semibold dark:text-gray-200">
-                                {loket}
-                              </TableCell>
-                              <TableCell
-                                colSpan={3}
-                                className="font-semibold dark:text-gray-300"
-                              >
-                                Total: {loketCount} Nopol (
-                                {formatRupiah(loketTotal)})
-                              </TableCell>
-                            </TableRow>,
-                            // Keterangan rows
-                            ...Object.entries(keteranganGroups).map(
-                              (
-                                [keterangan, { count, total }],
-                                keteranganIndex
-                              ) => (
-                                <TableRow
-                                  key={`keterangan-${loketIndex}-${keteranganIndex}`}
-                                >
-                                  <TableCell className="dark:text-gray-400"></TableCell>
-                                  <TableCell className="dark:text-gray-300">{keterangan}</TableCell>
-                                  <TableCell className="text-center dark:text-gray-300">
-                                    {count} Nopol
-                                  </TableCell>
-                                  <TableCell className="text-right dark:text-gray-300">
-                                    {formatRupiah(total)}
-                                  </TableCell>
-                                </TableRow>
-                              )
-                            ),
-                          ];
-                        }
+                        )
                       );
                     })()}
                   </TableBody>
-                  {selectedRow.gapDetails.length > 0 && (
-                    <TableFooter className="bg-gray-100 sticky bottom-0">
-                      <TableRow className="font-bold border-none">
-                        <TableCell className="dark:text-white">Grand Total</TableCell>
-                        <TableCell></TableCell>
-                        <TableCell className="text-center dark:text-white">
-                          {selectedRow.gapDetails.length} Nopol
-                        </TableCell>
-                        <TableCell className="text-right dark:text-white">
-                          {formatRupiah(
-                            selectedRow.gapDetails.reduce(
-                              (sum, item) => sum + item.rupiah,
-                              0
-                            )
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    </TableFooter>
-                  )}
                 </Table>
               ) : (
-                /* Regular view for non-SUB TOTAL rows */
                 <Table className="min-w-full">
                   <TableHeader className="bg-gray-100 dark:bg-zinc-800 sticky top-0">
                     <TableRow>
-                      <TableHead className="w-[60px] text-center">
-                        No
-                      </TableHead>
-                      <TableHead className="min-w-[120px] text-center">
+                      <TableHead className="w-[60px] text-center dark:text-gray-200">No</TableHead>
+                      <TableHead className="min-w-[120px] text-center dark:text-gray-200">
                         No. Polisi
                       </TableHead>
-                      <TableHead className="min-w-[150px] text-center">
-                        Keterangan
-                      </TableHead>
-                      <TableHead className="min-w-[120px] text-right">
-                        Nilai
-                      </TableHead>
-                      <TableHead className="min-w-[120px] text-right">
+                      <TableHead className="min-w-[120px] text-right dark:text-gray-200">
                         Tanggal
+                      </TableHead>
+                      <TableHead className="min-w-[120px] text-right dark:text-gray-200">
+                        Nilai
                       </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(() => {
-                      // Group gap details by keterangan
-                      const groupedDetails = selectedRow.gapDetails.reduce(
-                        (groups, item) => {
-                          const key = item.keterangan || "-";
-                          if (!groups[key]) {
-                            groups[key] = [];
-                          }
-                          groups[key].push(item);
-                          return groups;
-                        },
-                        {} as Record<string, GapDetail[]>
-                      );
-
-                      // If no data
-                      if (Object.keys(groupedDetails).length === 0) {
-                        return (
-                          <TableRow>
-                            <TableCell
-                              colSpan={5}
-                              className="py-8 text-center text-gray-500 dark:text-gray-400"
-                            >
-                              Tidak ada data detail GAP
-                            </TableCell>
-                          </TableRow>
-                        );
-                      }
-
-                      // Render grouped data
-                      let rowIndex = 0;
-                      return Object.entries(groupedDetails).flatMap(
-                        ([keterangan, items], groupIndex) => {
-                          const subtotal = items.reduce(
-                            (sum, item) => sum + item.rupiah,
-                            0
-                          );
-
-                          return [
-                            // Group header row
-                            <TableRow
-                              key={`header-${groupIndex}`}
-                              className="bg-gray-50 dark:bg-zinc-800/50"
-                            >
-                              <TableCell
-                                colSpan={5}
-                                className="font-semibold text-gray-800 dark:text-gray-200"
-                              >
-                                {keterangan} ({items.length} Nopol)
-                              </TableCell>
-                            </TableRow>,
-                            // Item rows
-                            ...items.map((item, itemIndex) => {
-                              rowIndex++;
-                              return (
-                                <TableRow
-                                  key={`item-${groupIndex}-${itemIndex}`}
-                                >
-                                  <TableCell className="py-2 font-medium text-center dark:text-gray-300">
-                                    {rowIndex}
-                                  </TableCell>
-                                  <TableCell className="py-2 font-mono text-center dark:text-gray-300">
-                                    {item.nopol}
-                                  </TableCell>
-                                  <TableCell className="py-2 text-center dark:text-gray-300">
-                                    {item.keterangan}
-                                  </TableCell>
-                                  <TableCell className="py-2 text-right dark:text-gray-300">
-                                    {formatRupiah(item.rupiah)}
-                                  </TableCell>
-                                  <TableCell className="py-2 text-right dark:text-gray-300">
-                                    {item.tgl_transaksi}
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            }),
-                            // Subtotal row
-                            <TableRow
-                              key={`subtotal-${groupIndex}`}
-                              className="bg-blue-50 dark:bg-blue-900/20 font-medium"
-                            >
-                              <TableCell colSpan={3} className="text-right dark:text-gray-300">
-                                Subtotal {keterangan}
-                              </TableCell>
-                              <TableCell className="text-right dark:text-gray-300">
-                                {formatRupiah(subtotal)}
-                              </TableCell>
-                              <TableCell></TableCell>
-                            </TableRow>,
-                          ];
-                        }
-                      );
-                    })()}
-                  </TableBody>
-                  {/* Grand total row */}
-                  {selectedRow.gapDetails.length > 0 && (
-                    <TableFooter className="bg-gray-100 dark:bg-zinc-800 sticky bottom-0 border-t dark:border-zinc-700">
-                      <TableRow className="font-bold">
-                        <TableCell colSpan={3} className="text-right dark:text-white">
-                          Grand Total
+                    {selectedRow.memastikanDetails.map((item, index) => (
+                      <TableRow key={index} className="border-b dark:border-zinc-800">
+                        <TableCell className="py-2 font-medium text-center dark:text-gray-300">
+                          {index + 1}
                         </TableCell>
-                        <TableCell className="text-right dark:text-white">
-                          {formatRupiah(
-                            selectedRow.gapDetails.reduce(
-                              (sum, item) => sum + item.rupiah,
-                              0
-                            )
-                          )}
+                        <TableCell className="py-2 font-mono text-center dark:text-gray-300">
+                          {item.nopol}
                         </TableCell>
-                        <TableCell></TableCell>
+                        <TableCell className="py-2 text-right dark:text-gray-300">
+                          {item.tgl_transaksi}
+                        </TableCell>
+                        <TableCell className="py-2 text-right dark:text-gray-300">
+                          {formatRupiah(item.rupiah)}
+                        </TableCell>
                       </TableRow>
-                    </TableFooter>
-                  )}
+                    ))}
+                  </TableBody>
                 </Table>
-              )
-            ) : selectedRow.loketKantor === "SUB TOTAL" ? (
-              <Table className="min-w-full">
-                <TableHeader className="bg-gray-100 dark:bg-zinc-800 sticky top-0">
-                  <TableRow>
-                    <TableHead className="min-w-[200px] dark:text-gray-200">Loket</TableHead>
-                    <TableHead className="text-center dark:text-gray-200">
-                      Jumlah Nopol
-                    </TableHead>
-                    <TableHead className="text-right dark:text-gray-200">Total Nilai</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(() => {
-                    const groupedByLoket =
-                      selectedRow.memastikanDetails.reduce((groups, item) => {
-                        const loket = item.loket || "Unknown";
-                        if (!groups[loket]) {
-                          groups[loket] = { count: 0, total: 0 };
-                        }
-                        groups[loket].count++;
-                        groups[loket].total += item.rupiah;
-                        return groups;
-                      }, {} as Record<string, { count: number; total: number }>);
+              )}
+            </div>
 
-                    return Object.entries(groupedByLoket).map(
-                      ([loket, { count, total }], index) => (
-                        <TableRow key={index} className="border-b dark:border-zinc-800">
-                          <TableCell className="font-semibold dark:text-gray-300">
-                            {loket}
-                          </TableCell>
-                          <TableCell className="text-center dark:text-gray-300">
-                            {count} Nopol
-                          </TableCell>
-                          <TableCell className="text-right dark:text-gray-300">
-                            {formatRupiah(total)}
-                          </TableCell>
-                        </TableRow>
-                      )
-                    );
-                  })()}
-                </TableBody>
-              </Table>
-            ) : (
-              <Table className="min-w-full">
-                <TableHeader className="bg-gray-100 dark:bg-zinc-800 sticky top-0">
-                  <TableRow>
-                    <TableHead className="w-[60px] text-center dark:text-gray-200">No</TableHead>
-                    <TableHead className="min-w-[120px] text-center dark:text-gray-200">
-                      No. Polisi
-                    </TableHead>
-                    <TableHead className="min-w-[120px] text-right dark:text-gray-200">
-                      Tanggal
-                    </TableHead>
-                    <TableHead className="min-w-[120px] text-right dark:text-gray-200">
-                      Nilai
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {selectedRow.memastikanDetails.map((item, index) => (
-                    <TableRow key={index} className="border-b dark:border-zinc-800">
-                      <TableCell className="py-2 font-medium text-center dark:text-gray-300">
-                        {index + 1}
-                      </TableCell>
-                      <TableCell className="py-2 font-mono text-center dark:text-gray-300">
-                        {item.nopol}
-                      </TableCell>
-                      <TableCell className="py-2 text-right dark:text-gray-300">
-                        {item.tgl_transaksi}
-                      </TableCell>
-                      <TableCell className="py-2 text-right dark:text-gray-300">
-                        {formatRupiah(item.rupiah)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="flex justify-end p-4 border-t dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900/50">
-            <Button
-              onClick={() => setSelectedRow(null)}
-              variant="outline"
-              className="min-w-[100px]"
-            >
-              Tutup
-            </Button>
+            {/* Footer */}
+            <div className="flex justify-end p-4 border-t dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900/50">
+              <Button
+                onClick={() => setSelectedRow(null)}
+                variant="outline"
+                className="min-w-[100px]"
+              >
+                Tutup
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
-    )}
-  </div>
-);
+      )}
+    </div>
+  );
 };
 
 export default RekapDashboard;

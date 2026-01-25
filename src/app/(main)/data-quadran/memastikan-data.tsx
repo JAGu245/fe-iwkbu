@@ -510,7 +510,7 @@ const MemastikanData = ({
 
     setUseDateRange(true);
     onDateRangeChange(startDate, endDate);
-    generateRekap();
+    fetchData();
   };
 
   // Helper functions for progressive processing
