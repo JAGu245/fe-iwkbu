@@ -41,9 +41,11 @@ interface ReportData {
   loket: string;
   kode_loket: string;
   iwkbu_tl_tgl_transaksi: string;
+  iwkbu_tl_no_resi: string;
   iwkbu_tl_nopol: string;
   iwkbu_tl_rupiah_penerimaan: number;
   iwkbu_ti_tgl_transaksi: string;
+  iwkbu_ti_no_resi: string;
   iwkbu_ti_nopol: string;
   iwkbu_ti_rupiah_penerimaan: number;
   kode_nopol_ci: number;
@@ -88,8 +90,9 @@ interface RekapRow {
   gapDetails: GapDetail[];
   memastikanDetails: MemastikanDetail[];
   mengupayakanCount: number;
-  placeholderChar: "0" | "-";
-}
+    checkinPlaceholder: "0" | "-";
+    checkoutPlaceholder: "0" | "-";
+  }
 
 interface LoadingState {
   message: string;
@@ -790,8 +793,9 @@ const RekapDashboard = ({
         gapDetails: [],
         memastikanDetails: [],
         mengupayakanCount: 0,
-        placeholderChar: "-",
-      };
+          checkinPlaceholder: "-",
+          checkoutPlaceholder: "-",
+        };
 
       const matchedNopol = new Set<string>();
       let matchedRupiah = 0;
@@ -818,9 +822,10 @@ const RekapDashboard = ({
 
           let dateRangeMatch = false;
           if (useDateRange && tlStartLimit > 0) {
-            const ts = parseToTimestamp(item.iwkbu_tl_tgl_transaksi);
-            dateRangeMatch = isDateInRangeOptimized(ts, tlStartLimit, tlEndLimit);
-          }
+              const ts = parseToTimestamp(item.iwkbu_tl_tgl_transaksi);
+              dateRangeMatch = isDateInRangeOptimized(ts, tlStartLimit, tlEndLimit) || 
+                               isDateInRangeOptimized(ts, tiStartLimit, tiEndLimit);
+            }
 
           if (
             (!useDateRange && monthMatch) ||
@@ -1027,30 +1032,60 @@ const RekapDashboard = ({
       rekap.memastikanDetails = memastikanDetails;
 
       // Tentukan placeholder untuk nilai kosong berdasarkan data mentah
-      const isDataEffectivelyEmpty =
-        rekap.checkinNopol === 0 || rekap.checkoutNopol === 0;
-      if (isDataEffectivelyEmpty) {
-        // Find if ANY record in the selected TI range is marked as NIHIL
-        const hasNihilRecord = endpointData.some((item) => {
-          if (!item.iwkbu_ti_tgl_transaksi) return false;
+      rekap.checkinPlaceholder = "-";
+      rekap.checkoutPlaceholder = "-";
+
+      if (rekap.checkinNopol === 0) {
+        const hasNihilRecordTl = endpointData.some((item) => {
+          if (!item.iwkbu_tl_tgl_transaksi) return false;
 
           let isInRange = false;
-          if (tiStartLimit > 0) {
-            const ts = parseToTimestamp(item.iwkbu_ti_tgl_transaksi);
-            isInRange = isDateInRangeOptimized(ts, tiStartLimit, tiEndLimit);
+          if (useDateRange && tlStartLimit > 0) {
+            const ts = parseToTimestamp(item.iwkbu_tl_tgl_transaksi);
+            isInRange = isDateInRangeOptimized(ts, tlStartLimit, tlEndLimit);
+          } else if (!useDateRange) {
+            const parts = item.iwkbu_tl_tgl_transaksi.split("/");
+            isInRange = parts[1] === monthStr;
           }
 
           if (!isInRange) return false;
 
-          // Check for explicit NIHIL keywords in various fields
-          const nopol = String(item.iwkbu_ti_nopol || "").trim().toUpperCase();
+          const nopol = String(item.iwkbu_tl_nopol || "").trim().toUpperCase();
+          const noResi = String(item.iwkbu_tl_no_resi || "").trim().toUpperCase();
           const desc = String(item.tl_keterangan_konversi_iwkbu || "").trim().toUpperCase();
 
-          return nopol === 'NIHIL' || desc.includes('NIHIL');
+          return nopol === 'NIHIL' || noResi === 'NIHIL' || desc.includes('NIHIL');
         });
 
-        if (hasNihilRecord) {
-          rekap.placeholderChar = "0";
+        if (hasNihilRecordTl) {
+          rekap.checkinPlaceholder = "0";
+        }
+      }
+
+      if (rekap.checkoutNopol === 0) {
+        const hasNihilRecordTi = endpointData.some((item) => {
+          if (!item.iwkbu_ti_tgl_transaksi) return false;
+
+          let isInRange = false;
+          if (useDateRange && tiStartLimit > 0) {
+            const ts = parseToTimestamp(item.iwkbu_ti_tgl_transaksi);
+            isInRange = isDateInRangeOptimized(ts, tiStartLimit, tiEndLimit);
+          } else if (!useDateRange) {
+            const parts = item.iwkbu_ti_tgl_transaksi.split("/");
+            isInRange = parts[1] === monthStr;
+          }
+
+          if (!isInRange) return false;
+
+          const nopol = String(item.iwkbu_ti_nopol || "").trim().toUpperCase();
+          const noResi = String(item.iwkbu_ti_no_resi || "").trim().toUpperCase();
+          const desc = String(item.tl_keterangan_konversi_iwkbu || "").trim().toUpperCase();
+
+          return nopol === 'NIHIL' || noResi === 'NIHIL' || desc.includes('NIHIL');
+        });
+
+        if (hasNihilRecordTi) {
+          rekap.checkoutPlaceholder = "0";
         }
       }
 
@@ -1081,7 +1116,8 @@ const RekapDashboard = ({
           gapDetails: [],
           memastikanDetails: [],
           mengupayakanCount: 0,
-          placeholderChar: "-",
+          checkinPlaceholder: "-",
+          checkoutPlaceholder: "-",
         });
 
         groupSubTotal = {
@@ -1104,7 +1140,8 @@ const RekapDashboard = ({
           gapDetails: [],
           memastikanDetails: [],
           mengupayakanCount: 0,
-          placeholderChar: "-",
+          checkinPlaceholder: "-",
+          checkoutPlaceholder: "-",
         };
       }
 
@@ -1195,8 +1232,9 @@ const RekapDashboard = ({
       gapDetails: [],
       memastikanDetails: [],
       mengupayakanCount: 0,
-      placeholderChar: "-",
-    };
+          checkinPlaceholder: "-",
+          checkoutPlaceholder: "-",
+        };
 
     result.push(grandTotal);
     return result;
@@ -1494,31 +1532,23 @@ const RekapDashboard = ({
                   </TableCell>
                   <TableCell>{row.petugas}</TableCell>
                   <TableCell className="text-center">
-                    {row.checkinNopol > 0
-                      ? row.checkinNopol
-                      : isIndividualLoketRow
-                        ? row.placeholderChar
-                        : "-"}
+                    {row.checkinNopol > 0 ? row.checkinNopol : isIndividualLoketRow ? row.checkinPlaceholder : "-"}
                   </TableCell>
                   <TableCell className="text-right">
-                    {row.checkinRupiah > 0
-                      ? formatRupiah(row.checkinRupiah)
-                      : isIndividualLoketRow
-                        ? row.placeholderChar
-                        : "-"}
+                    {row.checkinRupiah > 0 ? formatRupiah(row.checkinRupiah) : isIndividualLoketRow ? row.checkinPlaceholder : "-"}
                   </TableCell>
                   <TableCell className="text-center">
                     {row.checkoutNopol > 0
                       ? row.checkoutNopol
                       : isIndividualLoketRow
-                        ? row.placeholderChar
+                        ? row.checkoutPlaceholder
                         : "-"}
                   </TableCell>
                   <TableCell className="text-right">
                     {row.checkoutRupiah > 0
                       ? formatRupiah(row.checkoutRupiah)
                       : isIndividualLoketRow
-                        ? row.placeholderChar
+                        ? row.checkoutPlaceholder
                         : "-"}
                   </TableCell>
                   <TableCell
@@ -1535,7 +1565,7 @@ const RekapDashboard = ({
                     {row.memastikanNopol > 0
                       ? row.memastikanNopol
                       : isIndividualLoketRow
-                        ? row.placeholderChar
+                        ? row.checkoutPlaceholder
                         : "-"}
                   </TableCell>
                   <TableCell className="text-right">
@@ -1547,7 +1577,7 @@ const RekapDashboard = ({
                     {row.memastikanPersen > 0
                       ? formatPercentage(row.memastikanPersen)
                       : isIndividualLoketRow
-                        ? row.placeholderChar
+                        ? row.checkoutPlaceholder
                         : "-"}
                   </TableCell>
                   <TableCell
@@ -1568,42 +1598,42 @@ const RekapDashboard = ({
                     {row.gapNopol !== 0
                       ? row.gapNopol
                       : isIndividualLoketRow
-                        ? row.placeholderChar
+                        ? row.checkoutPlaceholder
                         : "-"}
                   </TableCell>
                   <TableCell className="text-center">
                     {row.mengupayakan !== 0
                       ? row.mengupayakan
                       : isIndividualLoketRow
-                        ? row.placeholderChar
+                        ? row.checkoutPlaceholder
                         : "-"}
                   </TableCell>
                   <TableCell className="text-center">
                     {row.menambahkanNopol > 0
                       ? row.menambahkanNopol
                       : isIndividualLoketRow
-                        ? row.placeholderChar
+                        ? row.checkoutPlaceholder
                         : "-"}
                   </TableCell>
                   <TableCell className="text-right">
                     {row.menambahkanRupiah > 0
                       ? formatRupiah(row.menambahkanRupiah)
                       : isIndividualLoketRow
-                        ? row.placeholderChar
+                        ? row.checkoutPlaceholder
                         : "-"}
                   </TableCell>
                   <TableCell className="text-center">
                     {row.sisaNopol > 0
                       ? row.sisaNopol
                       : isIndividualLoketRow
-                        ? row.placeholderChar
+                        ? row.checkoutPlaceholder
                         : "-"}
                   </TableCell>
                   <TableCell className="text-right">
                     {row.sisaRupiah > 0
                       ? formatRupiah(row.sisaRupiah)
                       : isIndividualLoketRow
-                        ? row.placeholderChar
+                        ? row.checkoutPlaceholder
                         : "-"}
                   </TableCell>
                 </TableRow>
