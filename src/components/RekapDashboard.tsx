@@ -90,9 +90,9 @@ interface RekapRow {
   gapDetails: GapDetail[];
   memastikanDetails: MemastikanDetail[];
   mengupayakanCount: number;
-    checkinPlaceholder: "0" | "-";
-    checkoutPlaceholder: "0" | "-";
-  }
+  checkinPlaceholder: "0" | "-";
+  checkoutPlaceholder: "0" | "-";
+}
 
 interface LoadingState {
   message: string;
@@ -113,7 +113,7 @@ const loketMapping = [
     no: 2,
     parentLoket: "",
     childLoket: "SAMSAT KENDAL",
-    petugas: "HEIRTANA HANDIETRA",
+    petugas: "AJENG SARINASTI",
     endpoint: `${BASE_URL}/samsatkendal`,
   },
   {
@@ -127,7 +127,7 @@ const loketMapping = [
     no: 4,
     parentLoket: "",
     childLoket: "SAMSAT PURWODADI",
-    petugas: "ADI SETIAWAN",
+    petugas: "LISTIYADI YUSUF NUGROHO",
     endpoint: `${BASE_URL}/samsatpurwodadi`,
   },
   {
@@ -141,7 +141,7 @@ const loketMapping = [
     no: 6,
     parentLoket: "",
     childLoket: "SAMSAT SALATIGA",
-    petugas: "RIKA WAHYU UTAMI",
+    petugas: "HEIRTANA HANDIETRA",
     endpoint: `${BASE_URL}/samsatsalatiga`,
   },
 
@@ -171,7 +171,7 @@ const loketMapping = [
     no: 10,
     parentLoket: "",
     childLoket: "SAMSAT BOYOLALI",
-    petugas: "RIO AQIL TITA",
+    petugas: "RIO ADITIYA",
     endpoint: `${BASE_URL}/samsatboyolali`,
   },
   {
@@ -208,21 +208,21 @@ const loketMapping = [
     no: 15,
     parentLoket: "",
     childLoket: "SAMSAT MAGELANG",
-    petugas: "BAGAS JATI INDRA SETIAWAN",
+    petugas: "ADI SETIAWAN",
     endpoint: `${BASE_URL}/samsatmagelang`,
   },
   {
     no: 16,
     parentLoket: "",
     childLoket: "SAMSAT PURWOREJO",
-    petugas: "SEPTIAN ADE R.R",
+    petugas: "EKO GIGIH",
     endpoint: `${BASE_URL}/samsatpurworejo`,
   },
   {
     no: 17,
     parentLoket: "",
     childLoket: "SAMSAT KEBUMEN",
-    petugas: "TUTIK WURYANTARI",
+    petugas: "ADAM HERTANTO",
     endpoint: `${BASE_URL}/samsatkebumen`,
   },
   {
@@ -432,7 +432,7 @@ const loketMapping = [
     no: 46,
     parentLoket: "CABANG SEMARANG",
     childLoket: "LOKET CABANG SEMARANG",
-    petugas: "ARIEF EKA SETIAWAN",
+    petugas: "RIKA WAHYU UTAMI",
     endpoint: `${BASE_URL}/samsat/lokprwsmg`,
   },
   {
@@ -446,7 +446,7 @@ const loketMapping = [
     no: 48,
     parentLoket: "",
     childLoket: "SAMSAT SEMARANG II",
-    petugas: "ADITYA GINANJAR INDRASAKTI",
+    petugas: "ARIEF EKA S",
     endpoint: `${BASE_URL}/samsat/semarang2`,
   },
   {
@@ -482,7 +482,7 @@ const loketMapping = [
     no: 53,
     parentLoket: "",
     childLoket: "SAMSAT WONOGIRI",
-    petugas: "ADISTI",
+    petugas: "AFRIZAL BASYA",
     endpoint: `${BASE_URL}/samsat/wonogiri`,
   },
   {
@@ -793,9 +793,9 @@ const RekapDashboard = ({
         gapDetails: [],
         memastikanDetails: [],
         mengupayakanCount: 0,
-          checkinPlaceholder: "-",
-          checkoutPlaceholder: "-",
-        };
+        checkinPlaceholder: "-",
+        checkoutPlaceholder: "-",
+      };
 
       const matchedNopol = new Set<string>();
       let matchedRupiah = 0;
@@ -822,10 +822,10 @@ const RekapDashboard = ({
 
           let dateRangeMatch = false;
           if (useDateRange && tlStartLimit > 0) {
-              const ts = parseToTimestamp(item.iwkbu_tl_tgl_transaksi);
-              dateRangeMatch = isDateInRangeOptimized(ts, tlStartLimit, tlEndLimit) || 
-                               isDateInRangeOptimized(ts, tiStartLimit, tiEndLimit);
-            }
+            const ts = parseToTimestamp(item.iwkbu_tl_tgl_transaksi);
+            dateRangeMatch = isDateInRangeOptimized(ts, tlStartLimit, tlEndLimit) ||
+              isDateInRangeOptimized(ts, tiStartLimit, tiEndLimit);
+          }
 
           if (
             (!useDateRange && monthMatch) ||
@@ -1232,9 +1232,9 @@ const RekapDashboard = ({
       gapDetails: [],
       memastikanDetails: [],
       mengupayakanCount: 0,
-          checkinPlaceholder: "-",
-          checkoutPlaceholder: "-",
-        };
+      checkinPlaceholder: "-",
+      checkoutPlaceholder: "-",
+    };
 
     result.push(grandTotal);
     return result;
