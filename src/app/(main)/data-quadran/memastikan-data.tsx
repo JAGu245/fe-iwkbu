@@ -493,6 +493,20 @@ const loketMapping = [
   },
 ];
 
+
+// Helper function to check if data exists (not empty/null/undefined)
+const hasData = (nopol: string | undefined | null): boolean => {
+  if (!nopol) return false;
+  const cleanNopol = nopol.trim();
+  return cleanNopol !== "" && cleanNopol !== "-";
+};
+
+// Helper function to check if NOPOL is NIHIL
+const isNihil = (nopol: string | undefined | null): boolean => {
+  if (!nopol) return false;
+  return nopol.trim().toUpperCase() === "NIHIL";
+};
+
 const MemastikanData = ({
   onDateRangeChange,
   initialStartDate,
@@ -501,7 +515,6 @@ const MemastikanData = ({
   const [data, setData] = useState<{ endpoint: string; data: ReportData[] }[]>(
     []
   );
-  const [rekapData, setRekapData] = useState<RekapRow[]>([]);
   const [month, setMonth] = useState<number>(5);
   const [loading, setLoading] = useState<LoadingState | null>({
     message: "Mempersiapkan data...",
@@ -511,6 +524,8 @@ const MemastikanData = ({
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [useDateRange, setUseDateRange] = useState(true);
+  const [appliedStartDate, setAppliedStartDate] = useState<Date | null>(null);
+  const [appliedEndDate, setAppliedEndDate] = useState<Date | null>(null);
 
   const formatDateWithoutYear = (date: Date | null) => {
     if (!date) return "Pilih Tanggal";
@@ -521,8 +536,9 @@ const MemastikanData = ({
     if (!startDate || !endDate) return;
 
     setUseDateRange(true);
+    setAppliedStartDate(startDate);
+    setAppliedEndDate(endDate);
     onDateRangeChange(startDate, endDate);
-    generateRekap();
   };
 
   const fetchData = async () => {
@@ -585,38 +601,104 @@ const MemastikanData = ({
     }
   };
 
-  const generateRekap = () => {
-    // ... FUNGSI generateRekap TETAP SAMA, TIDAK PERLU DIUBAH ...
+const rekapData = useMemo(() => {
     if (!data.length) {
-      console.log("Data masih kosong");
-      return;
+      return [];
     }
 
     const monthStr = month.toString().padStart(2, "0");
     const result: RekapRow[] = [];
     let groupSubTotal: RekapRow | null = null;
 
-    const isDateInRange = (
-      dateStr: string,
-      start: Date | null,
-      end: Date | null
-    ) => {
-      if (!start || !end || !dateStr) return false;
+    // Optimization: Pre-calculate date boundaries
+    // We convert to time values (numbers) for faster comparison than creating new Date objects in loops
+    let startLimit = 0;
+    let endLimit = 0;
+    let tlStartLimit = 0;
+    let tlEndLimit = 0;
+    let tiStartLimit = 0;
+    let tiEndLimit = 0;
+
+    // Helper to parse DD/MM/YYYY to timestamp
+    const parseToTimestamp = (dateStr: string): number | null => {
+      if (!dateStr) return null;
       const parts = dateStr.split("/");
-      if (parts.length < 2) return false;
-      const day = parseInt(parts[0]);
-      const month = parseInt(parts[1]);
-      const date = new Date(2000, month - 1, day);
-      const startDate = new Date(2000, start.getMonth(), start.getDate());
-      const endDate = new Date(2000, end.getMonth(), end.getDate());
-      return date >= startDate && date <= endDate;
+      if (parts.length < 3) return null;
+      // Note: Months are 0-indexed in JS Date
+      return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])).getTime();
     };
 
-    for (const loket of loketMapping) {
+    if (appliedStartDate && appliedEndDate) {
+      // Reset hours for accurate comparison
+      const s = new Date(appliedStartDate.getFullYear(), appliedStartDate.getMonth(), appliedStartDate.getDate());
+      const e = new Date(appliedEndDate.getFullYear(), appliedEndDate.getMonth(), appliedEndDate.getDate());
+      startLimit = s.getTime();
+      endLimit = e.getTime();
+    }
+
+    // Define Date Ranges for TL (Check-In) and TI (Check-Out)
+    const today = new Date();
+    const currentRealYear = today.getFullYear();
+    const selectedYear = appliedStartDate ? appliedStartDate.getFullYear() : currentRealYear;
+
+    let tlStartDate = appliedStartDate;
+    let tlEndDate = appliedEndDate;
+    let tiStartDate = appliedStartDate;
+    let tiEndDate = appliedEndDate;
+
+    // RULE: If data is pulled for ANY year:
+    // - Check-In (TL) uses Year - 1.
+    // - Check-Out (TI) uses Selected Year (Current).
+    if (appliedStartDate && appliedEndDate) {
+      const tlStart = new Date(appliedStartDate);
+      tlStart.setFullYear(appliedStartDate.getFullYear() - 1);
+      tlStartDate = tlStart;
+
+      const tlEnd = new Date(appliedEndDate);
+      tlEnd.setFullYear(appliedEndDate.getFullYear() - 1);
+      tlEndDate = tlEnd;
+    }
+
+    // Convert boundaries to timestamps for O(1) comparison in loops
+    if (tlStartDate && tlEndDate) {
+      tlStartLimit = new Date(tlStartDate.getFullYear(), tlStartDate.getMonth(), tlStartDate.getDate()).getTime();
+      tlEndLimit = new Date(tlEndDate.getFullYear(), tlEndDate.getMonth(), tlEndDate.getDate()).getTime();
+    }
+    if (tiStartDate && tiEndDate) {
+      tiStartLimit = new Date(tiStartDate.getFullYear(), tiStartDate.getMonth(), tiStartDate.getDate()).getTime();
+      tiEndLimit = new Date(tiEndDate.getFullYear(), tiEndDate.getMonth(), tiEndDate.getDate()).getTime();
+    }
+
+    // Optimized check function
+    const isDateInRangeOptimized = (dateTimestamp: number | null, rangeStart: number, rangeEnd: number) => {
+      if (dateTimestamp === null) return false;
+      return dateTimestamp >= rangeStart && dateTimestamp <= rangeEnd;
+    };
+
+    const finalizeAndPushSubTotal = (subTotal: RekapRow) => {
+      // Kalkulasi persentase berdasarkan Nopol unik untuk akurasi
+      const uniqueMemastikanNopol = new Set(
+        subTotal.memastikanDetails.map((d) => d.nopol)
+      );
+      subTotal.memastikanPersen =
+        subTotal.checkinNopol > 0
+          ? subTotal.memastikanNopol / subTotal.checkinNopol
+          : 0;
+
+      // Kalkulasi rata-rata Mengupayakan
+      subTotal.mengupayakan =
+        subTotal.mengupayakanCount > 0
+          ? Math.round(subTotal.mengupayakan / subTotal.mengupayakanCount)
+          : 0;
+
+      result.push(subTotal);
+    };
+
+    loketMapping.forEach((loket) => {
       const endpointData =
         data.find((d) => d.endpoint === loket.endpoint)?.data || [];
       const gapDetails: GapDetail[] = [];
-      const memastikanDetails: { nopol: string; rupiah: number }[] = [];
+      const memastikanDetails: MemastikanDetail[] = [];
 
       const rekap: RekapRow = {
         no: loket.no,
@@ -636,93 +718,217 @@ const MemastikanData = ({
         sisaNopol: 0,
         sisaRupiah: 0,
         gapDetails: [],
+        memastikanDetails: [],
         mengupayakanCount: 0,
+        checkinPlaceholder: "-",
+        checkoutPlaceholder: "-",
       };
 
-      // const matchedNopol = new Set<string>();
-      // let matchedRupiah = 0;
+      const matchedNopol = new Set<string>();
+      let matchedRupiah = 0;
       let totalBulanMajuTI = 0;
+      let totalBulanMajuTL = 0;
+      let countNopolBulanMajuTL = 0;
       let countNopolBulanMajuTI = 0;
       let menambahkanNopol = 0;
       let menambahkanRupiah = 0;
       const sisaNopolSet = new Set<string>();
       let sisaRupiah = 0;
 
+      // 1. Pre-process dates to timestamps once per item
+      // This creates a temporary map or we just call parseToTimestamp in the loop. 
+      // Since we iterate multiple times, let's just parse efficiently.
+
+      // Process checkin (TL) data
       endpointData.forEach((item) => {
         if (item.iwkbu_tl_tgl_transaksi) {
-          const [, mon] = item.iwkbu_tl_tgl_transaksi.split("/");
-          const monthMatch = mon === monthStr;
-          const dateRangeMatch =
-            useDateRange &&
-            isDateInRange(item.iwkbu_tl_tgl_transaksi, startDate, endDate);
+          const parts = item.iwkbu_tl_tgl_transaksi.split("/");
+          // parts[1] is month
+
+          const monthMatch = parts[1] === monthStr;
+
+          let dateRangeMatch = false;
+          if (useDateRange && tlStartLimit > 0) {
+            const ts = parseToTimestamp(item.iwkbu_tl_tgl_transaksi);
+            dateRangeMatch = isDateInRangeOptimized(ts, tlStartLimit, tlEndLimit) ||
+              isDateInRangeOptimized(ts, tiStartLimit, tiEndLimit);
+          }
 
           if (
             (!useDateRange && monthMatch) ||
             (useDateRange && dateRangeMatch)
           ) {
-            rekap.checkinNopol += item.kode_nopol_co || 0;
-            rekap.checkinRupiah += item.iwkbu_tl_rupiah_penerimaan || 0;
+            // Count data if exists (including NIHIL which shows as 0)
+            if (hasData(item.iwkbu_tl_nopol)) {
+              // If NIHIL, explicitly add 0; otherwise use actual value
+              if (isNihil(item.iwkbu_tl_nopol)) {
+                // NIHIL counts as present data but with value 0
+                rekap.checkinNopol += 0;
+                rekap.checkinRupiah += 0;
+              } else {
+                rekap.checkinNopol += item.kode_nopol_co || 0;
+                rekap.checkinRupiah += item.iwkbu_tl_rupiah_penerimaan || 0;
+              }
+              if (item.iwkbu_tl_bulan_maju > 0) {
+                totalBulanMajuTL += item.iwkbu_tl_bulan_maju;
+                countNopolBulanMajuTL++;
+              }
+            }
           }
         }
       });
 
+      const checkinNopolSet = new Set<string>();
       endpointData.forEach((item) => {
-        if (item.iwkbu_ti_tgl_transaksi) {
-          const [, mon] = item.iwkbu_ti_tgl_transaksi.split("/");
-          const monthMatch = mon === monthStr;
-          const dateRangeMatch =
-            useDateRange &&
-            isDateInRange(item.iwkbu_ti_tgl_transaksi, startDate, endDate);
+        if (item.iwkbu_tl_tgl_transaksi) {
+          const parts = item.iwkbu_tl_tgl_transaksi.split("/");
+          const monthMatch = parts[1] === monthStr;
+          let dateRangeMatch = false;
+
+          if (useDateRange && tlStartLimit > 0) {
+            const ts = parseToTimestamp(item.iwkbu_tl_tgl_transaksi);
+            dateRangeMatch = isDateInRangeOptimized(ts, tlStartLimit, tlEndLimit);
+          }
 
           if (
             (!useDateRange && monthMatch) ||
             (useDateRange && dateRangeMatch)
           ) {
-            rekap.checkoutNopol += item.kode_nopol_ci || 0;
-            rekap.checkoutRupiah += item.iwkbu_ti_rupiah_penerimaan || 0;
-
-            const isMenambahkan =
-              item.tl_keterangan_konversi_iwkbu === "Armada Baru" ||
-              item.tl_keterangan_konversi_iwkbu === "Mutasi Masuk";
-
-            const isMemastikan = endpointData.some(
-              (ciItem) =>
-                ciItem.iwkbu_tl_nopol === item.iwkbu_ti_nopol &&
-                ciItem.iwkbu_tl_tgl_transaksi &&
-                ((!useDateRange &&
-                  ciItem.iwkbu_tl_tgl_transaksi.split("/")[1] === monthStr) ||
-                  (useDateRange &&
-                    isDateInRange(
-                      ciItem.iwkbu_tl_tgl_transaksi,
-                      startDate,
-                      endDate
-                    )))
-            );
-
-            if (isMenambahkan) {
-              menambahkanNopol += 1;
-              menambahkanRupiah += item.iwkbu_ti_rupiah_penerimaan || 0;
+            // Only add nopols with data (including NIHIL) to the set
+            if (hasData(item.iwkbu_tl_nopol)) {
+              checkinNopolSet.add(item.iwkbu_tl_nopol);
             }
+          }
+        }
+      });
 
-            if (isMemastikan && item.iwkbu_ti_nopol) {
-              memastikanDetails.push({
-                nopol: item.iwkbu_ti_nopol,
-                rupiah: item.iwkbu_ti_rupiah_penerimaan || 0,
+      // Process checkout (TI) data
+      endpointData.forEach((item) => {
+        if (item.iwkbu_ti_tgl_transaksi) {
+          const parts = item.iwkbu_ti_tgl_transaksi.split("/");
+          const monthMatch = parts[1] === monthStr;
+          let dateRangeMatch = false;
+
+          if (useDateRange && tiStartLimit > 0) {
+            const ts = parseToTimestamp(item.iwkbu_ti_tgl_transaksi);
+            dateRangeMatch = isDateInRangeOptimized(ts, tiStartLimit, tiEndLimit);
+          }
+
+          if (
+            (!useDateRange && monthMatch) ||
+            (useDateRange && dateRangeMatch)
+          ) {
+            // Count data if exists (including NIHIL which shows as 0)
+            if (hasData(item.iwkbu_ti_nopol)) {
+              // If NIHIL, explicitly add 0; otherwise use actual value
+              if (isNihil(item.iwkbu_ti_nopol)) {
+                // NIHIL counts as present data but with value 0
+                rekap.checkoutNopol += 0;
+                rekap.checkoutRupiah += 0;
+              } else {
+                rekap.checkoutNopol += item.kode_nopol_ci || 0;
+                rekap.checkoutRupiah += item.iwkbu_ti_rupiah_penerimaan || 0;
+              }
+
+              const isMenambahkan =
+                item.tl_keterangan_konversi_iwkbu === "Armada Baru" ||
+                item.tl_keterangan_konversi_iwkbu === "Mutasi Masuk";
+
+              // Check against checkin set (includes NIHIL data)
+              const isMemastikan = checkinNopolSet.has(item.iwkbu_ti_nopol);
+
+              if (isMenambahkan && !isNihil(item.iwkbu_ti_nopol)) {
+                menambahkanNopol += 1;
+                menambahkanRupiah += item.iwkbu_ti_rupiah_penerimaan || 0;
+              }
+
+              if (isMemastikan && item.iwkbu_ti_nopol && !isNihil(item.iwkbu_ti_nopol)) {
+                memastikanDetails.push({
+                  nopol: item.iwkbu_ti_nopol,
+                  tgl_transaksi: item.iwkbu_ti_tgl_transaksi,
+                  rupiah: item.iwkbu_ti_rupiah_penerimaan || 0,
+                  loket: loket.childLoket,
+                });
+              }
+
+              const processedNopols = new Set<string>();
+              endpointData.forEach((ciItem) => {
+                if (
+                  hasData(ciItem.iwkbu_ti_nopol) &&
+                  !isNihil(ciItem.iwkbu_ti_nopol) &&
+                  ((isMemastikan && matchedNopol.has(ciItem.iwkbu_ti_nopol)) ||
+                    (isMenambahkan &&
+                      (ciItem.tl_keterangan_konversi_iwkbu === "Armada Baru" ||
+                        ciItem.tl_keterangan_konversi_iwkbu === "Mutasi Masuk")))
+                ) {
+                  processedNopols.add(ciItem.iwkbu_ti_nopol);
+                }
               });
-              // if (!matchedNopol.has(item.iwkbu_ti_nopol)) {
-              //   matchedNopol.add(item.iwkbu_ti_nopol);
-              //   matchedRupiah += item.iwkbu_ti_rupiah_penerimaan || 0;
-              // }
-            }
 
-            if (!isMemastikan && !isMenambahkan && item.iwkbu_ti_nopol) {
-              sisaNopolSet.add(item.iwkbu_ti_nopol);
-              sisaRupiah += item.iwkbu_ti_rupiah_penerimaan || 0;
-            }
+              if (
+                item.iwkbu_ti_nopol &&
+                !isNihil(item.iwkbu_ti_nopol) &&
+                !processedNopols.has(item.iwkbu_ti_nopol)
+              ) {
+                sisaNopolSet.add(item.iwkbu_ti_nopol);
+                sisaRupiah += item.iwkbu_ti_rupiah_penerimaan || 0;
+              }
 
-            if (item.iwkbu_ti_bulan_maju > 0) {
-              totalBulanMajuTI += item.iwkbu_ti_bulan_maju;
-              countNopolBulanMajuTI++;
+              if (item.iwkbu_ti_bulan_maju > 0) {
+                totalBulanMajuTI += item.iwkbu_ti_bulan_maju;
+                countNopolBulanMajuTI++;
+              }
+            }
+          }
+        }
+      });
+
+      // Process gap details (checkin nopols not in checkout)
+      endpointData.forEach((item) => {
+        if (item.iwkbu_tl_tgl_transaksi) {
+          const parts = item.iwkbu_tl_tgl_transaksi.split("/");
+          const monthMatch = parts[1] === monthStr;
+          let dateRangeMatch = false;
+
+          if (useDateRange && tlStartLimit > 0) {
+            const ts = parseToTimestamp(item.iwkbu_tl_tgl_transaksi);
+            dateRangeMatch = isDateInRangeOptimized(ts, tlStartLimit, tlEndLimit);
+          }
+
+          if (
+            (!useDateRange && monthMatch) ||
+            (useDateRange && dateRangeMatch)
+          ) {
+            // Only process if data exists and is not NIHIL
+            if (hasData(item.iwkbu_tl_nopol) && !isNihil(item.iwkbu_tl_nopol)) {
+              const foundInCheckout = endpointData.some(
+                (tiItem) => {
+                  const tiNopolCheck = hasData(tiItem.iwkbu_ti_nopol) &&
+                    !isNihil(tiItem.iwkbu_ti_nopol) &&
+                    tiItem.iwkbu_ti_nopol === item.iwkbu_tl_nopol &&
+                    tiItem.iwkbu_ti_tgl_transaksi;
+
+                  if (!tiNopolCheck) return false;
+
+                  if (!useDateRange) {
+                    return tiItem.iwkbu_ti_tgl_transaksi.split("/")[1] === monthStr;
+                  } else if (tiStartLimit > 0) {
+                    const ts = parseToTimestamp(tiItem.iwkbu_ti_tgl_transaksi);
+                    return isDateInRangeOptimized(ts, tiStartLimit, tiEndLimit);
+                  }
+                  return false;
+                }
+              );
+
+              if (!foundInCheckout) {
+                gapDetails.push({
+                  nopol: item.iwkbu_tl_nopol,
+                  keterangan: item.tl_keterangan_konversi_iwkbu || "-",
+                  rupiah: item.iwkbu_tl_rupiah_penerimaan || 0,
+                  tgl_transaksi: item.iwkbu_tl_tgl_transaksi,
+                  loket: loket.childLoket,
+                });
+              }
             }
           }
         }
@@ -733,32 +939,87 @@ const MemastikanData = ({
         (sum, detail) => sum + detail.rupiah,
         0
       );
+      // Hapus kalkulasi Nopol unik dan gunakan total memastikanNopol secara langsung.
       rekap.memastikanPersen =
         rekap.checkinNopol > 0 ? rekap.memastikanNopol / rekap.checkinNopol : 0;
       rekap.menambahkanNopol = menambahkanNopol;
       rekap.menambahkanRupiah = menambahkanRupiah;
-      rekap.gapNopol = rekap.checkinNopol - rekap.memastikanNopol;
+      rekap.gapNopol = gapDetails.length;
       rekap.mengupayakan =
         countNopolBulanMajuTI > 0
           ? Math.round(totalBulanMajuTI / rekap.checkoutNopol)
           : 0;
-      rekap.sisaNopol = sisaNopolSet.size;
-      rekap.sisaRupiah = sisaRupiah;
-      rekap.gapDetails = gapDetails;
 
+      rekap.sisaNopol =
+        rekap.checkoutNopol - (rekap.memastikanNopol + rekap.menambahkanNopol);
+      rekap.sisaRupiah =
+        rekap.checkoutRupiah -
+        (rekap.memastikanRupiah + rekap.menambahkanRupiah);
+      rekap.gapDetails = gapDetails;
+      rekap.memastikanDetails = memastikanDetails;
+
+      // Tentukan placeholder untuk nilai kosong berdasarkan data mentah
+      rekap.checkinPlaceholder = "-";
+      rekap.checkoutPlaceholder = "-";
+
+      if (rekap.checkinNopol === 0) {
+        const hasNihilRecordTl = endpointData.some((item) => {
+          if (!item.iwkbu_tl_tgl_transaksi) return false;
+
+          let isInRange = false;
+          if (useDateRange && tlStartLimit > 0) {
+            const ts = parseToTimestamp(item.iwkbu_tl_tgl_transaksi);
+            isInRange = isDateInRangeOptimized(ts, tlStartLimit, tlEndLimit);
+          } else if (!useDateRange) {
+            const parts = item.iwkbu_tl_tgl_transaksi.split("/");
+            isInRange = parts[1] === monthStr;
+          }
+
+          if (!isInRange) return false;
+
+          const nopol = String(item.iwkbu_tl_nopol || "").trim().toUpperCase();
+          const noResi = String(item.iwkbu_tl_no_resi || "").trim().toUpperCase();
+          const desc = String(item.tl_keterangan_konversi_iwkbu || "").trim().toUpperCase();
+
+          return nopol === 'NIHIL' || noResi === 'NIHIL' || desc.includes('NIHIL');
+        });
+
+        if (hasNihilRecordTl) {
+          rekap.checkinPlaceholder = "0";
+        }
+      }
+
+      if (rekap.checkoutNopol === 0) {
+        const hasNihilRecordTi = endpointData.some((item) => {
+          if (!item.iwkbu_ti_tgl_transaksi) return false;
+
+          let isInRange = false;
+          if (useDateRange && tiStartLimit > 0) {
+            const ts = parseToTimestamp(item.iwkbu_ti_tgl_transaksi);
+            isInRange = isDateInRangeOptimized(ts, tiStartLimit, tiEndLimit);
+          } else if (!useDateRange) {
+            const parts = item.iwkbu_ti_tgl_transaksi.split("/");
+            isInRange = parts[1] === monthStr;
+          }
+
+          if (!isInRange) return false;
+
+          const nopol = String(item.iwkbu_ti_nopol || "").trim().toUpperCase();
+          const noResi = String(item.iwkbu_ti_no_resi || "").trim().toUpperCase();
+          const desc = String(item.tl_keterangan_konversi_iwkbu || "").trim().toUpperCase();
+
+          return nopol === 'NIHIL' || noResi === 'NIHIL' || desc.includes('NIHIL');
+        });
+
+        if (hasNihilRecordTi) {
+          rekap.checkoutPlaceholder = "0";
+        }
+      }
+
+      // Handle parent loket and subtotals
       if (loket.parentLoket) {
         if (groupSubTotal) {
-          groupSubTotal.memastikanPersen =
-            groupSubTotal.checkinNopol > 0
-              ? groupSubTotal.memastikanNopol / groupSubTotal.checkinNopol
-              : 0;
-          groupSubTotal.mengupayakan =
-            groupSubTotal.mengupayakanCount > 0
-              ? Math.round(
-                groupSubTotal.mengupayakan / groupSubTotal.mengupayakanCount
-              )
-              : 0;
-          result.push(groupSubTotal);
+          finalizeAndPushSubTotal(groupSubTotal);
           groupSubTotal = null;
         }
 
@@ -780,7 +1041,10 @@ const MemastikanData = ({
           sisaNopol: 0,
           sisaRupiah: 0,
           gapDetails: [],
+          memastikanDetails: [],
           mengupayakanCount: 0,
+          checkinPlaceholder: "-",
+          checkoutPlaceholder: "-",
         });
 
         groupSubTotal = {
@@ -801,7 +1065,10 @@ const MemastikanData = ({
           sisaNopol: 0,
           sisaRupiah: 0,
           gapDetails: [],
+          memastikanDetails: [],
           mengupayakanCount: 0,
+          checkinPlaceholder: "-",
+          checkoutPlaceholder: "-",
         };
       }
 
@@ -824,25 +1091,81 @@ const MemastikanData = ({
         groupSubTotal.gapNopol += rekap.gapNopol;
         groupSubTotal.sisaNopol += rekap.sisaNopol;
         groupSubTotal.sisaRupiah += rekap.sisaRupiah;
+
+        groupSubTotal.gapDetails = groupSubTotal.gapDetails.concat(
+          rekap.gapDetails
+        );
+        groupSubTotal.memastikanDetails =
+          groupSubTotal.memastikanDetails.concat(rekap.memastikanDetails);
       }
-    }
+    });
 
     if (groupSubTotal) {
-      groupSubTotal.memastikanPersen =
-        groupSubTotal.checkinNopol > 0
-          ? groupSubTotal.memastikanNopol / groupSubTotal.checkinNopol
-          : 0;
-      groupSubTotal.mengupayakan =
-        groupSubTotal.mengupayakanCount > 0
-          ? Math.round(
-            groupSubTotal.mengupayakan / groupSubTotal.mengupayakanCount
-          )
-          : 0;
-      result.push(groupSubTotal);
+      finalizeAndPushSubTotal(groupSubTotal);
     }
 
-    setRekapData(result);
-  };
+    const subTotalRows = result.filter(
+      (row) => row.loketKantor === "SUB TOTAL"
+    );
+
+    const grandTotal: RekapRow = {
+      no: 0,
+      loketKantor: "GRAND TOTAL",
+      petugas: "",
+      checkinNopol: subTotalRows.reduce(
+        (sum, row) => sum + row.checkinNopol,
+        0
+      ),
+      checkinRupiah: subTotalRows.reduce(
+        (sum, row) => sum + row.checkinRupiah,
+        0
+      ),
+      checkoutNopol: subTotalRows.reduce(
+        (sum, row) => sum + row.checkoutNopol,
+        0
+      ),
+      checkoutRupiah: subTotalRows.reduce(
+        (sum, row) => sum + row.checkoutRupiah,
+        0
+      ),
+      memastikanNopol: subTotalRows.reduce(
+        (sum, row) => sum + row.memastikanNopol,
+        0
+      ),
+      memastikanRupiah: subTotalRows.reduce(
+        (sum, row) => sum + row.memastikanRupiah,
+        0
+      ),
+      memastikanPersen:
+        subTotalRows.reduce((sum, row) => sum + row.checkinNopol, 0) > 0
+          ? subTotalRows.reduce((sum, row) => sum + row.memastikanNopol, 0) /
+          subTotalRows.reduce((sum, row) => sum + row.checkinNopol, 0)
+          : 0,
+      menambahkanNopol: subTotalRows.reduce(
+        (sum, row) => sum + row.menambahkanNopol,
+        0
+      ),
+      menambahkanRupiah: subTotalRows.reduce(
+        (sum, row) => sum + row.menambahkanRupiah,
+        0
+      ),
+      mengupayakan: Math.round(
+        subTotalRows.reduce((sum, row) => sum + row.mengupayakan, 0) /
+        (subTotalRows.filter((row) => row.mengupayakan > 0).length || 1)
+      ),
+      gapNopol: subTotalRows.reduce((sum, row) => sum + row.gapNopol, 0),
+      sisaNopol: subTotalRows.reduce((sum, row) => sum + row.sisaNopol, 0),
+      sisaRupiah: subTotalRows.reduce((sum, row) => sum + row.sisaRupiah, 0),
+      gapDetails: [],
+      memastikanDetails: [],
+      mengupayakanCount: 0,
+      checkinPlaceholder: "-",
+      checkoutPlaceholder: "-",
+    };
+
+    result.push(grandTotal);
+    return result;
+  }, [data, month, appliedStartDate, appliedEndDate, useDateRange]);
 
   useEffect(() => {
     const today = new Date();
@@ -850,17 +1173,16 @@ const MemastikanData = ({
 
     setStartDate(firstDayOfMonth);
     setEndDate(today);
+    setAppliedStartDate(firstDayOfMonth);
+    setAppliedEndDate(today);
     setMonth(today.getMonth() + 1);
     setUseDateRange(true);
+
+    // kirim ke parent component
     onDateRangeChange(firstDayOfMonth, today);
+
     fetchData();
   }, []);
-
-  useEffect(() => {
-    if (data.length > 0) {
-      generateRekap();
-    }
-  }, [data, month]);
 
   // --- START: LOGIKA BARU UNTUK MEMPROSES DATA DASHBOARD KUADRAN ---
   const quadrantData = useMemo(() => {
