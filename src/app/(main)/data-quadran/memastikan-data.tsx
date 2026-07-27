@@ -59,7 +59,16 @@ interface GapDetail {
   keterangan: string;
   rupiah: number;
   tgl_transaksi: string;
+  loket?: string;
 }
+
+interface MemastikanDetail {
+  nopol: string;
+  tgl_transaksi: string;
+  rupiah: number;
+  loket?: string;
+}
+
 interface RekapRow {
   no: number;
   loketKantor: string;
@@ -78,7 +87,10 @@ interface RekapRow {
   sisaNopol: number;
   sisaRupiah: number;
   gapDetails: GapDetail[];
+  memastikanDetails: MemastikanDetail[];
   mengupayakanCount: number;
+  checkinPlaceholder: "0" | "-";
+  checkoutPlaceholder: "0" | "-";
 }
 
 interface LoadingState {
