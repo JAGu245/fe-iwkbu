@@ -43,9 +43,11 @@ interface ReportData {
   loket: string;
   kode_loket: string;
   iwkbu_tl_tgl_transaksi: string;
+  iwkbu_tl_no_resi: string;
   iwkbu_tl_nopol: string;
   iwkbu_tl_rupiah_penerimaan: number;
   iwkbu_ti_tgl_transaksi: string;
+  iwkbu_ti_no_resi: string;
   iwkbu_ti_nopol: string;
   iwkbu_ti_rupiah_penerimaan: number;
   kode_nopol_ci: number;
