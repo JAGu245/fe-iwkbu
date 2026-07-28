@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-
+import Image from "next/image";
 
 const LoginPage = () => {
   const [username, setUsername] = useState("");
@@ -24,9 +24,8 @@ const LoginPage = () => {
       });
 
       if (res.ok) {
-        // Redirect ke halaman utama setelah login berhasil
         router.push("/");
-        router.refresh(); // Memastikan server-side state diperbarui
+        router.refresh();
       } else {
         const data = await res.json();
         setError(data.message || "Login gagal!");
@@ -37,98 +36,119 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-zinc-50 dark:bg-black overflow-hidden relative">
-      {/* LEFT SIDE: FORM */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 lg:px-10 py-10 relative z-20">
-        <div className="w-full max-w-[320px] p-6 bg-white dark:bg-zinc-900 rounded-[2rem] shadow-2xl shadow-zinc-200/50 dark:shadow-none border border-zinc-100 dark:border-zinc-800 animate-in fade-in slide-in-from-bottom-8 duration-1000">
-          <div className="text-left space-y-1 mb-6">
-            <h1 className="text-2xl font-black tracking-tighter text-zinc-900 dark:text-white">
-              Login
-            </h1>
+    <div className="flex relative min-h-screen overflow-hidden font-sans" style={{ background: 'linear-gradient(to top right, #88B6F6, #226CA7, #002F55)' }}>
+      
+      {/* LEFT COLUMN: FORM */}
+      <div className="w-full lg:w-[55%] flex flex-col items-center justify-center px-6 lg:px-16 xl:px-24 py-10 relative z-20">
+        <div className="w-full max-w-[420px] p-9 bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/30 ring-1 ring-white/10">
+          <div className="text-left mb-6">
+            <h2 className="text-white font-bold text-lg mb-1 text-center tracking-wide">Welcome to</h2>
+            <div className="flex justify-center items-center gap-2 mb-1">
+              <span className="text-5xl font-black text-[#0a5e8a]" style={{ WebkitTextStroke: '6px #ffffff', paintOrder: 'stroke fill', letterSpacing: '-0.04em', textShadow: '2px 2px 6px rgba(0,0,0,0.3)' }}>
+                CICO
+              </span>
+              <span className="text-[2rem] font-bold text-white drop-shadow-sm">Monitoring</span>
+            </div>
+            <h3 className="text-white font-light text-2xl text-right mr-4 tracking-wide">Dashboard</h3>
+            
+            <div className="mt-4 flex justify-center">
+               <div className="border-t border-dashed border-white/40 w-3/4"></div>
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
               <label
                 htmlFor="username"
-                className="text-xs font-bold text-zinc-700 dark:text-zinc-300 ml-1"
+                className="text-sm font-medium text-white/90 ml-1"
               >
                 Username
               </label>
-              <input
-                type="text"
-                id="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Username"
-                className="w-full h-10 px-4 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-white text-sm placeholder:text-zinc-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all duration-300"
-                required
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  id="username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full h-11 px-4 border-none rounded bg-white text-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 font-medium"
+                  required
+                />
+              </div>
             </div>
 
             <div className="space-y-1.5">
-              <div className="flex justify-between items-center px-1">
-                <label
-                  htmlFor="password"
-                  className="text-xs font-bold text-zinc-700 dark:text-zinc-300"
-                >
-                  Password
-                </label>
-              </div>
+              <label
+                htmlFor="password"
+                className="text-sm font-medium text-white/90 ml-1"
+              >
+                Password
+              </label>
               <input
                 type="password"
                 id="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                className="w-full h-10 px-4 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-white text-sm placeholder:text-zinc-400 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all duration-300"
+                className="w-full h-11 px-4 border-none rounded bg-white text-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 font-medium"
                 required
               />
             </div>
 
+            {/* Removed Remember Me & Forgot Password */}
+
             {error && (
-              <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-900/10 border border-rose-200 dark:border-rose-900/20 text-rose-600 dark:text-rose-400 text-[10px] font-semibold animate-shake">
+              <div className="p-3 rounded bg-rose-500/80 border border-rose-500/50 text-white text-[12px] font-semibold text-center animate-shake">
                 {error}
               </div>
             )}
 
             <button
               type="submit"
-              className="w-full h-10 flex items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 transform hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 mt-2"
+              className="w-full h-11 flex items-center justify-center rounded bg-[#2883ED] hover:bg-[#1a6fd4] text-white font-bold text-sm transition-all mt-4 shadow-lg tracking-wider"
             >
-              Login
+              LOGIN
             </button>
           </form>
         </div>
       </div>
 
-      {/* RIGHT SIDE: IMAGE */}
-      <div className="hidden lg:block lg:flex-1 relative overflow-hidden">
-        <div className="absolute inset-0 bg-blue-600/10 mix-blend-multiply z-10" />
-        <img
-          src="/images/avatars/login.png"
-          alt="Login decoration"
-          className="absolute inset-0 w-full h-full object-cover transition-transform duration-10000 hover:scale-110"
-        />
-        {/* TOP BRANDING (OPTIONAL) */}
-        <div className="absolute top-8 right-8 z-20 flex items-center gap-2 bg-white/20 backdrop-blur-md px-4 py-2 rounded-full border border-white/30">
-          <div className="w-8 h-8 rounded-full overflow-hidden relative">
-            <img
-              src="/images/avatars/logo.png"
-              alt="Logo"
-              className="w-full h-full object-cover"
-            />
-          </div>
-          <span className="text-white font-bold text-sm tracking-tighter">
-            JASARAHARJA
-          </span>
+      {/* RIGHT COLUMN: CURVED WHITE CONTAINER */}
+      <div className="hidden lg:flex lg:w-[45%] bg-white rounded-tl-[100px] rounded-bl-[300px] shadow-[-10px_0_30px_rgba(0,0,0,0.1)] flex-col pl-6 pt-6 pb-8 pr-0 relative z-30">
+        
+        {/* Logos */}
+        <div className="flex justify-between items-center w-full mt-1 pr-6 pl-4">
+          <Image
+            src="/images/avatars/login aset/Danantara Indonesia.png"
+            alt="Danantara Indonesia"
+            width={120}
+            height={40}
+            className="object-contain"
+          />
+          <Image
+            src="/images/avatars/login aset/logo-jr.png"
+            alt="Jasa Raharja"
+            width={75}
+            height={40}
+            className="object-contain"
+          />
         </div>
-      </div>
 
-      {/* VERSION LABEL */}
-      <div className="absolute bottom-8 right-8 z-30 pointer-events-none select-none">
-        <span className="text-sm font-light italic tracking-[0.4em] text-white/75 font-mono">
-          v2.0
+        {/* The Image (lebih lebar ke kanan, top position, naik dari ujung kanan bawah) */}
+        <div className="relative w-full flex-1 mt-8 mb-0 rounded-tl-[40px] rounded-bl-[220px] overflow-hidden shadow-[-5px_10px_30px_rgba(0,0,0,0.1)] border-y-4 border-l-4 border-r-0 border-white/50">
+          <Image
+            src="/images/avatars/login aset/gambar kanan.png"
+            alt="Background Collage"
+            fill
+            className="object-cover object-top"
+            priority
+          />
+        </div>
+        
+      </div>
+      
+      {/* Footer centered on the entire page */}
+      <div className="absolute bottom-6 left-0 w-full text-center z-50 pointer-events-none select-none">
+        <span className="text-sm font-medium text-white/90 drop-shadow-md">
+          © 2026 CICO System. All rights reserved.
         </span>
       </div>
     </div>
