@@ -169,15 +169,6 @@ const AppSidebar = () => {
         </SidebarGroup>
       </SidebarContent>
 
-      <div className="px-4 py-2 mt-4 transition-all duration-300 group-data-[collapsible=icon]:px-1 group-data-[collapsible=icon]:opacity-0">
-        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-xl border-2 border-primary/10 shadow-lg bg-sidebar-accent/50 transition-all duration-300">
-          <img
-            src="/images/avatars/gntr.jpg"
-            alt="Decoration"
-            className="h-full w-full object-cover"
-          />
-        </div>
-      </div>
 
       <SidebarFooter>
         <SidebarMenu>
