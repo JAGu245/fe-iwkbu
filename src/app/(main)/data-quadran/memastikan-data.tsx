@@ -948,12 +948,15 @@ const rekapData = useMemo(() => {
         }
       });
 
-      rekap.memastikanNopol = memastikanDetails.length;
+      const uniqueMemastikanNopol = new Set(
+        memastikanDetails.map((d) => d.nopol)
+      );
+      rekap.memastikanNopol = uniqueMemastikanNopol.size;
       rekap.memastikanRupiah = memastikanDetails.reduce(
         (sum, detail) => sum + detail.rupiah,
         0
       );
-      // Hapus kalkulasi Nopol unik dan gunakan total memastikanNopol secara langsung.
+      // Gunakan ukuran Set Nopol unik untuk mencegah lebih dari 100%
       rekap.memastikanPersen =
         rekap.checkinNopol > 0 ? rekap.memastikanNopol / rekap.checkinNopol : 0;
       rekap.menambahkanNopol = menambahkanNopol;
